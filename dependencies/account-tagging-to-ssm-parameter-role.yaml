@@ -1,0 +1,57 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template used for assumed IAM Role for Account Tags to SSM Parameters (OrganizationalUnit:Root Exclude:ManagementAccount)
+
+Parameters:
+  pManagementAccountId:
+    Type: String
+  pSsmParameterPrefix:
+    Type: String
+    Default: /account/tags/
+
+Resources:
+  rAccountTagToSsmParameterRole:
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "This role will be assumed to create SSM Parameter based on AWS Account tags. 
+              Role name is needed so that the role can be assumed."
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: account-tagging-to-ssm-parameter
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:root
+            Action:
+              - sts:AssumeRole
+            Condition:
+              ArnLike:
+                aws:PrincipalARN:
+                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/account-creation-workflow-*
+      Policies:
+        - PolicyName: AccountSsmManagement
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:PutParameter
+                  - ssm:DeleteParameter
+                  - ssm:AddTagsToResource
+                  - ssm:RemoveTagsFromResource
+                Resource: 
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${pSsmParameterPrefix}*
+      Tags:
+        - Key: AccountCreationComponent
+          Value: true
+        - Key: CreatedBy
+          Value: LZA_CustomizationConfig

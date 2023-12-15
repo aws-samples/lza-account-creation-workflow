@@ -1,0 +1,71 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+StartAt: Sync Azure AD Group
+States:
+  Sync Azure AD Group:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${AzureADGroupSyncFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Next: Check Status of Group in Identity Center
+
+  Check Status of Group in Identity Center:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ValidateADGroupSyncToSSOFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Next: Is Group in Identity Center?
+
+  Is Group in Identity Center?:
+    Type: Choice
+    Choices:
+      - Variable: $.Payload.AzureAD.WaitForAdSync
+        BooleanEquals: false
+        Next: Add Permission Set to Group
+    Default: Wait 1 Minute for AD Group Sync
+    
+  Wait 1 Minute for AD Group Sync:
+    Type: Wait
+    Seconds: 60
+    Next: Check Status of Group in Identity Center
+
+  Add Permission Set to Group:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${AttachPermissionSetFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Return Response
+
+  Return Response:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ReturnResponseFunctionArn}
+      Payload:
+        StageInput.$: $
+        OriginalInput.$: $$.Execution.Input
+    End: true
+TimeoutSeconds: 86400

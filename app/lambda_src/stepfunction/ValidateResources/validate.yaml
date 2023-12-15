@@ -1,0 +1,28 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+validate:
+  organizationalUnits:
+    Workloads:
+      iam:
+        roles:
+          - account-creation-validation
+          - account-tagging-to-ssm-parameter
+      ssm:
+        parameters:
+          - /cdk-bootstrap/accel/version
+          # Parameters generated from AWS Account Tag
+          - /account/tags/SCProvisionedProductId
+          - /account/tags/account-name
+          - /account/tags/product-version
+          - /account/tags/purpose
+          - /account/tags/support-dl
+          - /account/tags/vendor
+      config:
+        rules:
+          - accelerator-elb-logging-enabled
+          - accelerator-s3-bucket-logging-enabled
+          - accelerator-cloudtrail-enabled
+      s3:
+        buckets:
+          - aws-accelerator-s3-access-logs-{{ account }}-{{ region }}

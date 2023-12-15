@@ -1,0 +1,54 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+StartAt: Check For Running Processes
+States:
+  Check For Running Processes:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${CheckForRunningProcessesFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+      - ErrorEquals:
+          - States.ALL
+        MaxAttempts: 3
+    Next: Is a Process Already InProgress?
+  
+  Is a Process Already InProgress?:
+    Type: Choice
+    Choices:
+      - IsPresent: true
+        Variable: $.Payload.CodePipeline.Wait
+        Next: Wait 5 Minutes (Wait for Other Process to Finish)
+      - IsPresent: true
+        Variable: $.Payload.CodeBuild.Wait
+        Next: Wait 5 Minutes (Wait for Other Process to Finish)
+    Default: Return Response
+
+  Wait 5 Minutes (Wait for Other Process to Finish):
+    Type: Wait
+    Seconds: 300
+    Next: Check For Running Processes
+  
+  Return Response:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ReturnResponseFunctionArn}
+      Payload:
+        StageInput.$: $
+        OriginalInput.$: $$.Execution.Input
+    End: true
+TimeoutSeconds: 86400

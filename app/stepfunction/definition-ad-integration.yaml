@@ -1,0 +1,264 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+StartAt: Check For Running Processes
+States:
+  Check For Running Processes:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${CheckForRunningProcessesFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+      - ErrorEquals:
+          - States.ALL
+        MaxAttempts: 3
+    Next: Is a Process Already InProgress?
+  
+  Is a Process Already InProgress?:
+    Type: Choice
+    Choices:
+      - IsPresent: true
+        Variable: $.Payload.CheckForRunningProcesses.CodePipeline
+        Next: Wait 5 Minutes (Wait for Other Process to Finish)
+      - IsPresent: true
+        Variable: $.Payload.CheckForRunningProcesses.CodeBuild
+        Next: Wait 5 Minutes (Wait for Other Process to Finish)
+    Default: Create Account
+
+  Wait 5 Minutes (Wait for Other Process to Finish):
+    Type: Wait
+    Seconds: 300
+    Next: Check For Running Processes
+
+  Create Account:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${CreateAccountFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+      - ErrorEquals:
+          - States.ALL
+        MaxAttempts: 3
+    Next: Get Account Status
+  
+  Get Account Status:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${GetAccountStatusFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Account Creation Complete?
+  
+  Account Creation Complete?:
+    Type: Choice
+    Choices:
+      - Or:
+          - Variable: $.Payload.Account.Status
+            StringEquals: FAILED
+          - Variable: $.Payload.Account.Status
+            StringEquals: SUCCESS
+          - Variable: $.Payload.Account.Status
+            StringEquals: BYPASSED
+        Next: Sync Azure AD Group
+    Default: Wait 1 Minute (Wait for Account to Complete)
+  
+  Wait 1 Minute (Wait for Account to Complete):
+    Type: Wait
+    Seconds: 60
+    Next: Get Account Status
+  
+  Sync Azure AD Group:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${AzureADGroupSyncFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Check Status of Group in Identity Center
+
+  Check Status of Group in Identity Center:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ValidateADGroupSyncToSSOFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Is Group in Identity Center?
+  
+  Is Group in Identity Center?:
+    Type: Choice
+    Choices:
+      - Variable: $.Payload.AzureAD.WaitForAdSync
+        BooleanEquals: false
+        Next: Create Additional Resources
+    Default: Wait 1 Minute for AD Group Sync
+  
+  Wait 1 Minute for AD Group Sync:
+    Type: Wait
+    Seconds: 60
+    Next: Check Status of Group in Identity Center
+
+  Create Additional Resources:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${CreateAdditionalResourcesFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Add Permission Set to Group
+  
+  Add Permission Set to Group:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${AttachPermissionSetFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Validate Resources
+  
+  Validate Resources:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ValidateResourcesFunctionArn}
+      Payload.$: $
+    Catch:
+      - ErrorEquals:
+          - TypeError
+        Next: Return Response
+    Retry:
+      - ErrorEquals:
+          - Lambda.ServiceException
+          - Lambda.AWSLambdaException
+          - Lambda.SdkClientException
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
+    Next: Resource Validation Complete?
+  
+  Resource Validation Complete?:
+    Type: Choice
+    Choices:
+      - Variable: $.Payload.ValidationStatus
+        StringEquals: COMPLETED
+        Next: Add Email Info to Payload
+    Default: Wait 1 Minute (Wait for Resource Validation)
+  
+  Wait 1 Minute (Wait for Resource Validation):
+    Type: Wait
+    Seconds: 60
+    Next: Validate Resources
+  
+  Add Email Info to Payload:
+    Type: Pass
+    Parameters:
+      subject: AWS Account Creation Complete
+      email_heading: AWS Account Creation Info
+      opening_paragraph: Your requested AWS account has finished the creation process and is ready to use.
+      account_name.$: $.Payload.AccountInfo.AccountName
+      account_id.$: $.Payload.Account.Outputs.AccountId
+      sso_url: ${SSOLoginURL}
+      to_addresses.$: $.Payload.AccountInfo.SupportDL
+      cc_list: ${SuccessEmailCcList}
+      bcc_list: ${SuccessEmailBlindCcList}
+    ResultPath: $.Payload.EmailInfo
+    Next: Send Email to Account Owner
+  
+  Send Email to Account Owner:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${SendEmailWithSESFunctionArn}
+      Payload.$: $
+    Next: Return Response
+  
+  Return Response:
+    Type: Task
+    Resource: arn:aws:states:::lambda:invoke
+    Parameters:
+      FunctionName: ${ReturnResponseFunctionArn}
+      Payload:
+        StageInput.$: $
+        OriginalInput.$: $$.Execution.Input
+    End: true
+
+TimeoutSeconds: 86400

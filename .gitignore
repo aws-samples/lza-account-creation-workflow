@@ -1,0 +1,22 @@
+*.swp
+package-lock.json
+__pycache__
+.pytest_cache
+.python-version
+.venv
+*.egg-info
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+cdk.context.json
+
+# Logs
+logs
+
+# System files
+.DS_Store
+
+# UnitTests
+.coverage
+.tox

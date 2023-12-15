@@ -1,0 +1,42 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template used for assumed IAM Roles for Account Creation Validation (OrganizationalUnit:Root Exclude:ManagementAccount)
+
+Parameters:
+  pManagementAccountId:
+    Type: String
+
+Resources:
+  rAccountCreationValidationRole:
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "This role will be assumed to create SSM Parameter based on AWS Account tags. 
+              Role name is needed so that the role can be assumed."  
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: account-creation-validation
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:root
+            Action:
+              - sts:AssumeRole
+            Condition:
+              ArnLike:
+                aws:PrincipalARN:
+                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/account-creation-workflow-*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+      Tags:
+        - Key: AccountCreationComponent
+          Value: true
+        - Key: CreatedBy
+          Value: LZA_CustomizationConfig

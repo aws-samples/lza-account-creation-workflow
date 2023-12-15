@@ -1,0 +1,65 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+# To use SSM parameters within this configuration follow this format SSM:<<parameter_name>> (ex. SSM:/base/test)
+
+# List of tags to be added to the CloudFormation Stacks
+tags:
+  aws-solution: account-creation-workflow
+
+# AWS Account Information 
+awsAccount:
+  awsRegion: us-east-1
+
+deployInfrastructure:
+  cloudformation:
+    stackName: account-creation-workflow-pipeline
+
+  codepipeline:
+    pipelineName: account-creation-workflow
+
+  codecommit:
+    repositoryName: account-creation-workflow
+    ignoreFilesDirectoriesCodeCommit: # Ignore specific files and directories during CodeCommit creation
+      - .python-version # This file caused the cdk synth to fail in the pipeline
+
+
+appInfrastructure:
+  cloudformation:
+    stackName: account-creation-workflow-application
+
+  lambda:
+    functionLogLevel: INFO  # Log level for all lambda function code
+
+  sns:
+    accountCreationFailure: 
+      - test@example.com
+
+  ses: 
+    accountCompletionNotification: true
+    accountCompletionFromEmail: test@example.com # Email that the request will come from and group that will review the request
+    accountCompletionCcList: ""
+    accountCompletionBlindCcList: ""
+
+  # LZA Level Variables 
+  lzaPipelineName: AWSAccelerator-Pipeline
+  lzaRepositoryName: aws-accelerator-config
+  
+  # Decommissioning Solution Varaibles
+  accountDecommissionProject: Account-Decommission
+
+  # IAM Roles used for validation and tagging
+  accountTagToSsmParameterRole: account-tagging-to-ssm-parameter
+  lzaAccountValidationRole: account-creation-validation
+  lzaConfigLogValidationRole: config-log-validation
+
+  # The URL used for managed accounts to login, this is sent to the Account Requester in the completion email
+  ssoLoginUrl: https://d-123456789.awsapps.com/start/
+
+  # Used to create root email address for AWS Accounts - << rootEmailPrefix >>+<< account_name >>@<< rootEmailDomain >>
+  rootEmailPrefix: test
+  rootEmailDomain: example.com
+
+  # Account Admin Permission Set Name
+  enableAzureADIntegration: true  
+  graphApiSecretName: GraphApiSecret
