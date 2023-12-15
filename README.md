@@ -1,4 +1,4 @@
-# account-creation-workflow
+# lza-account-creation-workflow
 
 ## Description
 
@@ -157,7 +157,7 @@ For this example S3 Bucket Access Logging is not enabled but is recommended that
 - Change directory into the repository directory.
 
   ```bash
-  cd account-creation-approval-workflow
+  cd lza-account-creation-workflow
   ```
 
 - Update the config/deploy-config.yaml file with the appropriate values. Typical values that will need updating; accountCreationFailure, accountCompletionFromEmail, ssoLoginUrl, rootEmailPrefix, rootEmailDomain, and enableAzureADIntegration.
@@ -231,7 +231,7 @@ For this example S3 Bucket Access Logging is not enabled but is recommended that
 - Change directory into the repository directory.
 
   ```bash
-  cd account-creation-approval-workflow
+  cd lza-account-creation-workflow
   ```
 
 - Ensure requirement-run.txt has been installed on the machine you would like to invoke AWS Step Function.
