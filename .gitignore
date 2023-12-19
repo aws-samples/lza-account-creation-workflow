@@ -5,6 +5,7 @@ __pycache__
 .python-version
 .venv
 *.egg-info
+deploy-config-test.yaml
 
 # CDK asset staging directory
 .cdk.staging

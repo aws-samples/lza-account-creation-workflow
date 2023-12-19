@@ -171,9 +171,9 @@ if __name__ == "__main__":
             time.sleep(check_delay())
             LOGGER.debug(sm_desc_response)
 
-        if sm_desc_response['status'] == 'FAILED':
+        if sm_desc_response.get('status') == 'FAILED':
             print(sm_desc_response['cause']['errorMessage'])
-        elif sm_desc_response['status'] == 'SUCCEEDED':
+        elif sm_desc_response.get('status') == 'SUCCEEDED':
             print(sm_desc_response['cause']['errorMessage'])
         else: 
             print(sm_desc_response)
