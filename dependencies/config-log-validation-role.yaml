@@ -8,6 +8,9 @@ Description: Template used for assumed IAM Roles for config validation (AwsAccou
 Parameters:
   pManagementAccountId:
     Type: String
+  pRolePrefix:
+    Type: String
+    Default: lza-account-creation-     
 
 Resources:
   rConfigLogValidationRole:
@@ -32,7 +35,7 @@ Resources:
             Condition:
               ArnLike:
                 aws:PrincipalARN:
-                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/account-creation-workflow-*              
+                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/${pRolePrefix}*              
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSConfigUserAccess
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess

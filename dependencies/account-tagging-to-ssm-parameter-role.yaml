@@ -3,11 +3,14 @@
 
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Template used for assumed IAM Role for Account Tags to SSM Parameters (OrganizationalUnit:Root Exclude:ManagementAccount)
+Description: Template used for assumed IAM Role for Account Tags to SSM Parameters (OganizationalUnit:Root Exclude:ManagementAcount)
 
 Parameters:
   pManagementAccountId:
     Type: String
+  pRolePrefix:
+    Type: String
+    Default: lza-account-creation-    
   pSsmParameterPrefix:
     Type: String
     Default: /account/tags/
@@ -35,7 +38,7 @@ Resources:
             Condition:
               ArnLike:
                 aws:PrincipalARN:
-                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/account-creation-workflow-*
+                  - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/${pRolePrefix}*
       Policies:
         - PolicyName: AccountSsmManagement
           PolicyDocument: 

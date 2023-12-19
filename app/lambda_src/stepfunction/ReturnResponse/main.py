@@ -34,11 +34,12 @@ def lambda_handler(event, context):
 
     try:
         if event['StageInput'].get('Error'):
-            payload = {"errorMessage": json.loads(event['StageInput']['Cause'])[
-                'errorMessage']}
+            payload = {"errorMessage": json.loads(event['StageInput']['Cause'])['errorMessage']}
             account_info = event['OriginalInput']['AccountInfo']
-            send_sns_message(error=json.loads(event['StageInput']['Cause'])[
-                             'errorMessage'], account_name=account_info['AccountName'])
+            send_sns_message(
+                error=json.loads(event['StageInput']['Cause'])['errorMessage'], 
+                account_name=account_info['AccountName']
+            )
             raise StepFunctionTaskFailureException(
                 'A task in the account creation step function failed: ', payload.get('errorMessage'))
 

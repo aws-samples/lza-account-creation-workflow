@@ -15,8 +15,9 @@ with open(config_file_path, 'r', encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.SafeLoader)
 
 app = cdk.App()
+
 PipelineStack(
-    app, "account-creation-workflow-pipeline",
+    app, config['deployInfrastructure']['cloudformation']['stackName'],
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
         region=os.getenv('CDK_DEFAULT_REGION')

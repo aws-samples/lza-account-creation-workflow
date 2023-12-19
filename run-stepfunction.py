@@ -171,8 +171,12 @@ if __name__ == "__main__":
             time.sleep(check_delay())
             LOGGER.debug(sm_desc_response)
 
-        LOGGER.debug("*******  DONE  *******")
-        print(sm_desc_response)
+        if sm_desc_response['status'] == 'FAILED':
+            print(sm_desc_response['cause']['errorMessage'])
+        elif sm_desc_response['status'] == 'SUCCEEDED':
+            print(sm_desc_response['cause']['errorMessage'])
+        else: 
+            print(sm_desc_response)
 
     except Exception as e:
         LOGGER.exception(e)
