@@ -264,12 +264,9 @@ class AccountCreationWorkflowStack(Stack):
                 "codebuild:BatchGetBuilds",
                 "servicecatalog:ScanProvisionedProducts",
                 "servicecatalog:SearchProducts",
-                # "servicecatalog:List*",
                 "servicecatalog:ListPortfolios",
                 "servicecatalog:ListTagsForResource",
                 "servicecatalog:ListApplications",
-                # "servicecatalog:Create*",
-                # "servicecatalog:Describe*",
                 "servicecatalog:DescribePortfolioShares",
                 "servicecatalog:DescribeProduct",
                 "servicecatalog:DescribePortfolio",
@@ -610,8 +607,11 @@ class AccountCreationWorkflowStack(Stack):
         NagSuppressions.add_stack_suppressions(
             self,
             [{
-
                 "id": 'AwsSolutions-IAM4',
                 "reason": 'The IAM user, role, or group uses AWS managed policies.'
+            },
+            {
+                 "id": 'AwsSolutions-L1',
+                "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
             }]
         )

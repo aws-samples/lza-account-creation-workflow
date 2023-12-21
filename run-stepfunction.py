@@ -171,8 +171,14 @@ if __name__ == "__main__":
             time.sleep(check_delay())
             LOGGER.debug(sm_desc_response)
 
-        LOGGER.debug("*******  DONE  *******")
-        print(sm_desc_response)
-
+        if sm_desc_response.get('status') == 'FAILED':
+            print(json.loads(sm_desc_response['cause']))
+        elif sm_desc_response.get('status') == 'ABORTED':
+            print("StepFunction has been ABORTED.")
+        elif sm_desc_response.get('status') == 'TIMED_OUT':
+            print("StepFunction has TIMED_OUT.")    
+        else:
+            print(json.loads(sm_desc_response['output'])['Payload'])
+        
     except Exception as e:
         LOGGER.exception(e)

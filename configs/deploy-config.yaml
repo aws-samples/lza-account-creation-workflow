@@ -5,7 +5,7 @@
 
 # List of tags to be added to the CloudFormation Stacks
 tags:
-  aws-solution: account-creation-workflow
+  aws-solution: lza-account-creation-workflow
 
 # AWS Account Information 
 awsAccount:
@@ -13,20 +13,20 @@ awsAccount:
 
 deployInfrastructure:
   cloudformation:
-    stackName: account-creation-workflow-pipeline
+    stackName: lza-account-creation-workflow-pipeline
 
   codepipeline:
-    pipelineName: account-creation-workflow
+    pipelineName: lza-account-creation-workflow
 
   codecommit:
-    repositoryName: account-creation-workflow
+    repositoryName: lza-account-creation-workflow
     ignoreFilesDirectoriesCodeCommit: # Ignore specific files and directories during CodeCommit creation
       - .python-version # This file caused the cdk synth to fail in the pipeline
 
 
 appInfrastructure:
   cloudformation:
-    stackName: account-creation-workflow-application
+    stackName: lza-account-creation-workflow-application
 
   lambda:
     functionLogLevel: INFO  # Log level for all lambda function code

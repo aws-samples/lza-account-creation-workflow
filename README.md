@@ -18,33 +18,33 @@ Optionally, there is a feature that will integration Microsoft Entra ID (Azure A
 
 | Folder/File                                       | Description |
 | :------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| app                                               | CDK Application Infrastructure Code (e.g. Lambdas / StepFunctions / SES / S3)                                                                                                              |
-| app/lambda_layer                                  | Directory to hold all AWS Lambda Layers source code.                                                                                                                                                                                  |
-| app/lambda_layer/account_creation_helper          | AWS Lambda Layer that has all code that is referrenced more that once within multple Lambda Functions. |
+| app                                               | CDK Application Infrastructure Code (e.g. Lambdas / StepFunctions / SES / S3).                                                                                                              |
+| app/lambda_layer                                  | Directory to holds all AWS Lambda Layer's source code. This is code that is referenced in more than one Lambda Function.                                                                                                                                                                                  |
+| app/lambda_layer/account_creation_helper          | AWS Lambda Layer that has all common code that is used across the solution. This includes modules for assuming roles / checking Service Catalog progress. |
 | app/lambda_layer/azure_ad_helper         | AWS Lambda Layer that has code for connecting to the Microsoft Entra ID services. The layer uses MS Graph API for the connection. |
-| app/lambda_layer/boto3          | AWS Lambda Layer for the boto3, since AWS Lambda doesn't always get packaged with the latest version fo Boto3. |
-| app/lambda_layer/identity_center_helper          | AWS Lambda Layer that support common AWS Identity Center calls.  |
+| app/lambda_layer/boto3          | AWS Lambda Layer for the boto3, since AWS Lambda doesn't always get packaged with the latest version of Boto3. |
+| app/lambda_layer/identity_center_helper          | AWS Lambda Layer that support common AWS IAM Identity Center calls.  |
 | app/lambda_src                                    | Directory to hold AWS Lambda Functions source code.                                 |
-| app/lambda_src/event                              | Directory to hold AWS Lambda Functions that are triggered by an Event                                                                                                                                                                                |
+| app/lambda_src/event                              | Directory to hold AWS Lambda Functions that are triggered by an Event.                                                                                                                                                                                |
 | app/lambda_src/event/AccountTagToSsmParameter      | AWS Lambda Function creates an SSM Parameter in the target account based on Tags attached to the account within AWS Organizations. The SSM Parameter will be prefixed with "/account/tags/".                                                                                                                                                      |     |                                                                                                                |     |
 | app/lambda_src/stepfunction                       | Directory to hold AWS Lambda Functions that are used within the AWS Step Function.                                                                                                                                                                         |
 | app/lambda_src/stepfunction/AttachPermissionSet                         | AWS Lambda Function that will add a permissions set to an SSO Group. |
-| app/lambda_src/stepfunction/AzureADGroupSync                            | AWS Lambda Function that will sync the desired Microsoft Entra ID Group to AWS Identity Center. |
+| app/lambda_src/stepfunction/AzureADGroupSync                            | AWS Lambda Function that will sync the desired Microsoft Entra ID Group to AWS AWS IAM Identity Center. |
 | app/lambda_src/stepfunction/CheckForRunningProcesses                           | AWS Lambda Function that will check to see if the Decommissioning CodeBuild project and LZA Pipeline is currently running. If one of those resources are running it will delay the AWS Step Function. |
 | app/lambda_src/stepfunction/CreateAccount                            | AWS Lambda Function that will use LZA to create an AWS Account. |
-| app/lambda_src/stepfunction/CreateAddtionalResources                         | AWS Lambda Function that will create AWS resources that couldn't be managed by LZA or CloudFormation (e.g. Account Alias / Service Catalog Tags)                                                                                                                                                  |
+| app/lambda_src/stepfunction/CreateAddtionalResources                         | AWS Lambda Function that will create AWS resources that couldn't be managed by LZA or CloudFormation (e.g. Account Alias / Service Catalog Tags).                                                                                                                                                  |
 | app/lambda_src/stepfunction/GetAccountStatus                         | AWS Lambda Function that will scan the AWS Service Catalog Provisioned Product to see if the account creation has completed.                                                                                                                                                  |
 | app/lambda_src/stepfunction/ReturnResponse                           | AWS Lambda Function that will return either an Account Number (if account creation successful) or an error message (if there is a failure in the creation process).                                                                                                           |
 | app/lambda_src/stepfunction/SendEmailWithSES                         | AWS Lambda Function that will send out emails to account requester or team mates waiting for the account creation to finish. |
-| app/lambda_src/stepfunction/ValidateADGroupSyncToSSO                           | AWS Lambda Function validate that the desired Microsoft Entra ID Group to AWS Identity Center.. |
+| app/lambda_src/stepfunction/ValidateADGroupSyncToSSO                           | AWS Lambda Function validate that the desired Microsoft Entra ID Group to AWS IAM Identity Center. |
 | app/lambda_src/stepfunction/ValidateResources                        | AWS Lambda Function that will ensure all Control Tower Customizations have run successfully.                                                                                                                                                                                  |
 | app/stepfunction                                  | Directory that holds the AWS Step Function definitions.                                                                                                                                                                                                    |
-| configs                                           | Configuration files used for the solution                                                                                                                                                                                      |
-| configs/deploy-config.yaml                        | Configuration file used for deployment and application infrastructure                                                                                                                                                          |
+| configs                                           | Configuration files used for the solution.                                                                                                                                                                                      |
+| configs/deploy-config.yaml                        | Configuration file used for deployment and application infrastructure.                                                                                                                                                          |
 | images                                            | Images used in README document.                                                                                                                                                                                                |
-| pipeline                                          | CDK Deployment Infrastructure Code (e.g. CodePipeline / CodeCommit / CodeBuild )                                                                                                                                               |
+| pipeline                                          | CDK Deployment Infrastructure Code (e.g. CodePipeline / CodeCommit / CodeBuild).                                                                                                                                               |
 | scripts                                           | Supporting scripts to ensure the Solution uses best practices                                                                                                                                                                  |
-| tests                                             | All testing code should reside                                                                                                                                                                                                 |
+| tests                                             | All testing code should reside.                                                                                                                                                                                                 |
 | requirements.txt                                  | Pip requirements file for deployment environment.                                                                                                                                                                              |
 
 ## Pre-requisite Steps
@@ -257,6 +257,10 @@ For this example S3 Bucket Access Logging is not enabled but is recommended that
   ```
 
 **Result**: _Account ID_
+
+## Troubleshooting
+
+[Troubleshooting](docs/TROUBLESHOOTING.md)
 
 ## WARNING
 

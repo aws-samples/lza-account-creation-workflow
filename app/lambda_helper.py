@@ -79,13 +79,14 @@ def create_lambda_function(scope, function_name: str, function_path: str, retent
         for layer in layers:
             i_function.add_layers(layer)
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/account-creation-workflow-pipeline/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/Resource",
-        [{
-            "id": 'AwsSolutions-L1',
-            "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
-        }]
-    )
+    # Moved to entire stack suppression
+    # NagSuppressions.add_resource_suppressions_by_path(
+    #     scope, f"/lza-account-creation-workflow/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/Resource",
+    #     [{
+    #         "id": 'AwsSolutions-L1',
+    #         "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
+    #     }]
+    # )
 
     return i_function
 
@@ -110,12 +111,14 @@ def create_lambda_docker_function(scope, function_name: str, function_path: str,
                 value=env_value
             )
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/account-creation-workflow-pipeline/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/ServiceRole/Resource",
-        [{
-            "id": 'AwsSolutions-IAM4',
-            "reason": 'The IAM user, role, or group uses AWS managed policies.'
-        }]
-    )
+    # Moved to entire stack suppression
+    # NagSuppressions.add_resource_suppressions_by_path(
+    #     scope, f"/lza-account-creation-workflow/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/ServiceRole/Resource",
+    #     [{
+    #         "id": 'AwsSolutions-IAM4',
+    #         "reason": 'The IAM user, role, or group uses AWS managed policies.'
+    #     }, 
+    #     ]
+    # )
 
     return i_function
