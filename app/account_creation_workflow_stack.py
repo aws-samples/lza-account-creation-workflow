@@ -13,6 +13,7 @@ from aws_cdk import (
 from constructs import Construct
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from app.helper import replace_ssm_in_config
+from app.kms_helper import create_kms_keys
 from app.sns_helper import create_sns_topic
 from app.ses_helper import create_ses_identity
 from app.stepfunction_helper import create_stepfunction
@@ -49,9 +50,13 @@ class AccountCreationWorkflowStack(Stack):
             "SuccessEmailBlindCcList": config['appInfrastructure']['ses']['accountCompletionBlindCcList'],
         }
 
+        # KMS Keys
+        i_kms_keys = create_kms_keys(scope=self)
+
         # SNS Topics
         i_account_creation_failure_sns = create_sns_topic(
             scope=self, sns_name='AccountCreationFailure',
+            key=i_kms_keys['SNS'],
             subscribers_email=config['appInfrastructure']['sns']['accountCreationFailure']
         )
 
@@ -107,6 +112,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_account_creation_helper_layer, i_boto3_layer],
             timeout=120,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "ASSUMED_ROLE_NAME": config['appInfrastructure']['accountTagToSsmParameterRole']
@@ -149,6 +155,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_boto3_layer],
             timeout=120,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LZA_PIPELINE_NAME": config['appInfrastructure'].get('lzaPipelineName', ""),
                 "ACCOUNT_DECOMMISSION_PROJECT_NAME": config['appInfrastructure'].get('accountDecommissionProject', "")
@@ -184,6 +191,7 @@ class AccountCreationWorkflowStack(Stack):
                 'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
@@ -250,6 +258,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_account_creation_helper_layer],
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
@@ -308,6 +317,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_account_creation_helper_layer],
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "ASSUMED_ROLE_NAME": "AWSControlTowerExecution"
@@ -353,6 +363,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_account_creation_helper_layer],
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "ASSUMED_VALIDATION_ROLE_NAME": config['appInfrastructure']['lzaAccountValidationRole'],
@@ -407,6 +418,7 @@ class AccountCreationWorkflowStack(Stack):
             layers=[i_account_creation_helper_layer],
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "SNS_FAILURE_TOPIC": i_account_creation_failure_sns.topic_arn
@@ -419,7 +431,23 @@ class AccountCreationWorkflowStack(Stack):
             ],
             resources=[i_account_creation_failure_sns.topic_arn]
         ))
+        i_return_response_fn.add_to_role_policy(
+            statement=iam.PolicyStatement(
+            actions=[
+                "kms:GenerateDataKey"
+            ],
+            resources=["*"]
+        ))        
         sfn_lambdas.update({"ReturnResponseFunctionArn": i_return_response_fn.function_arn})
+
+        NagSuppressions.add_resource_suppressions_by_path(
+            self, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionReturnResponse/ServiceRole/DefaultPolicy/Resource",
+            [{
+                "id": 'AwsSolutions-IAM5',
+                "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
+                    ' with evidence for those permission. Added temporarily to identify resource arns.'
+            }]
+        )
 
         i_send_email_ses_fn = create_lambda_function(
             scope=self,
@@ -428,6 +456,7 @@ class AccountCreationWorkflowStack(Stack):
             description='This function willsend an email using an SES identity.',
             timeout=900,
             retention_role=i_log_retention_role,
+            key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                 "SES_IDENTITY_ARN": f"arn:{partition}:ses:{region}:{account_id}:identity/{i_account_creation_from_email_ses.email_identity_name}",
@@ -462,6 +491,7 @@ class AccountCreationWorkflowStack(Stack):
                 layers=[i_azure_ad_helper_layer],
                 timeout=900,
                 retention_role=i_log_retention_role,
+                key=i_kms_keys['Lambda'],
                 env_vars={
                     "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
                     "GRAPH_API_SECRET_NAME": config['appInfrastructure']['graphApiSecretName']
@@ -507,6 +537,7 @@ class AccountCreationWorkflowStack(Stack):
                 ],
                 timeout=900,
                 retention_role=i_log_retention_role,
+                key=i_kms_keys['Lambda'],
                 env_vars={
                     "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
                 }
@@ -542,6 +573,7 @@ class AccountCreationWorkflowStack(Stack):
                 ],
                 timeout=900,
                 retention_role=i_log_retention_role,
+                key=i_kms_keys['Lambda'],
                 env_vars={
                     "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
                 }

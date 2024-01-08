@@ -11,9 +11,9 @@ from aws_cdk import (
     BundlingOutput,
     aws_lambda as lambda_,
     aws_logs as logs,
-    aws_iam as iam
+    aws_iam as iam,
+    aws_kms as kms
 )
-from cdk_nag import NagSuppressions
 
 
 def create_lambda_layer(scope, layer_name: str, description: str = None) -> lambda_.ILayerVersion:
@@ -42,7 +42,7 @@ def create_lambda_layer(scope, layer_name: str, description: str = None) -> lamb
 
 
 def create_lambda_function(scope, function_name: str, function_path: str, retention_role: iam.IRole, 
-                           timeout: int = 120, layers: list = None, env_vars: dict = None, 
+                           key: kms.IKey, timeout: int = 120, layers: list = None, env_vars: dict = None, 
                            description: str = 'Lambada') -> lambda_.IFunction:
     """Creates Lambda Function"""
     i_function = lambda_.Function(
@@ -65,6 +65,7 @@ def create_lambda_function(scope, function_name: str, function_path: str, retent
         ),
         log_retention=logs.RetentionDays.TWO_MONTHS,
         log_retention_role=retention_role,
+        environment_encryption=key,
         timeout=Duration.seconds(timeout)
     )
 
@@ -79,21 +80,12 @@ def create_lambda_function(scope, function_name: str, function_path: str, retent
         for layer in layers:
             i_function.add_layers(layer)
 
-    # Moved to entire stack suppression
-    # NagSuppressions.add_resource_suppressions_by_path(
-    #     scope, f"/lza-account-creation-workflow/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/Resource",
-    #     [{
-    #         "id": 'AwsSolutions-L1',
-    #         "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
-    #     }]
-    # )
-
     return i_function
 
 
 def create_lambda_docker_function(scope, function_name: str, function_path: str, retention_role: iam.IRole, 
-                                  timeout: int = 120, env_vars: dict = None, description: str = 'Lambada', 
-                                  ) -> lambda_.IFunction:
+                                  key: kms.IKey, timeout: int = 120, env_vars: dict = None, 
+                                  description: str = 'Lambada') -> lambda_.IFunction:
     i_function = lambda_.DockerImageFunction(
         scope, f"rLambdaFunction{function_name}",
         function_name=function_name,
@@ -101,6 +93,7 @@ def create_lambda_docker_function(scope, function_name: str, function_path: str,
         code=lambda_.DockerImageCode.from_image_asset(path.join(Path(__file__).parents[0], f"lambda_src/{function_path}/{function_name}")),
         log_retention=logs.RetentionDays.TWO_MONTHS,
         log_retention_role=retention_role,
+        environment_encryption=key,
         timeout=Duration.seconds(timeout)
     )
 
@@ -110,15 +103,5 @@ def create_lambda_docker_function(scope, function_name: str, function_path: str,
                 key=env_key,
                 value=env_value
             )
-
-    # Moved to entire stack suppression
-    # NagSuppressions.add_resource_suppressions_by_path(
-    #     scope, f"/lza-account-creation-workflow/Deploy-Application/account-creation-workflow-application/rLambdaFunction{function_name}/ServiceRole/Resource",
-    #     [{
-    #         "id": 'AwsSolutions-IAM4',
-    #         "reason": 'The IAM user, role, or group uses AWS managed policies.'
-    #     }, 
-    #     ]
-    # )
 
     return i_function

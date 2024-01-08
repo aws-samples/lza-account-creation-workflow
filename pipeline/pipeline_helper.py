@@ -29,7 +29,8 @@ def create_archive(ignored_files_directories: list, zip_name='zip_file') -> str:
         "cdk.out",
         ".git",
         ".DS_Store",
-        ".venv"
+        ".venv",
+        ".python-version"
     ))
 
     root_dir = Path(__file__).parents[1]

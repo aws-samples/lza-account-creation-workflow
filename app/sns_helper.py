@@ -8,9 +8,9 @@ from aws_cdk import (
 )
 
 
-def create_sns_topic(scope, sns_name: str, subscribers_email: list = None) -> sns.ITopic:
-    key = kms.Key.from_lookup(scope, f"rSnsKms{sns_name.title().replace('_','')}", alias_name='alias/aws/sns')
+def create_sns_topic(scope, sns_name: str, key: kms.IKey, subscribers_email: list = None) -> sns.ITopic:
 
+    # Create SNS Topic
     i_sns_topic = sns.Topic(
         scope, f"rSnsTopic{sns_name.title().replace('/','')}",
         display_name=sns_name,
@@ -18,6 +18,7 @@ def create_sns_topic(scope, sns_name: str, subscribers_email: list = None) -> sn
         master_key=key
     )
 
+    # Add subscribers emails to SNS Topic
     if subscribers_email:
         for email_address in subscribers_email:
             i_sns_topic.add_subscription(sns_subscriptions.EmailSubscription(email_address))
