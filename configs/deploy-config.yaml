@@ -33,11 +33,11 @@ appInfrastructure:
 
   sns:
     accountCreationFailure: 
-      - kuskowsk@amazon.com
+      - test@example.com
 
   ses: 
     accountCompletionNotification: true
-    accountCompletionFromEmail: kuskowsk@amazon.com # Email that the request will come from and group that will review the request
+    accountCompletionFromEmail: test@example.com # Email that the request will come from and group that will review the request
     accountCompletionCcList: ""
     accountCompletionBlindCcList: ""
 
@@ -53,13 +53,13 @@ appInfrastructure:
   lzaAccountValidationRole: account-creation-validation
   lzaConfigLogValidationRole: config-log-validation
 
-  # The URL used for managed accounts to login, the default Login Url can be found under the "Users and access" section within AWS Control Tower.
-  ssoLoginUrl: https://d-9067649e1e.awsapps.com/start/
+  # The URL used for managed accounts to login, this is sent to the Account Requester in the completion email
+  ssoLoginUrl: https://d-123456789.awsapps.com/start/
 
-  # Used to create root email address for AWS Accounts
-  rootEmailPrefix: kuskowsk
-  rootEmailDomain: amazon.com
+  # Used to create root email address for AWS Accounts - << rootEmailPrefix >>+<< account_name >>@<< rootEmailDomain >>
+  rootEmailPrefix: test
+  rootEmailDomain: example.com
 
   # Account Admin Permission Set Name
-  enableAzureADIntegration: true
+  enableAzureADIntegration: true  
   graphApiSecretName: GraphApiSecret
