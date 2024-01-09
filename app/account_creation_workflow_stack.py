@@ -434,7 +434,8 @@ class AccountCreationWorkflowStack(Stack):
         i_return_response_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
             actions=[
-                "kms:GenerateDataKey"
+                "kms:GenerateDataKey",
+                "kms:Decrypt"
             ],
             resources=["*"]
         ))        
