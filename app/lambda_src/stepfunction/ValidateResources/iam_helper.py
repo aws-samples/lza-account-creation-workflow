@@ -12,17 +12,33 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 class ValidateIam:
-    """Class to validate IAM
     """
+    Validates IAM roles in AWS accounts.
+
+    The class assumes an IAM role to make API calls. It contains
+    a method to check if a given IAM role exists, returning the
+    validation result.
+    """
+
     creds = {}
 
     def __init__(self, assumed_creds: dict):
+        # initialization logic
         self.creds = assumed_creds
         iam_args = {"service_name": "iam"}
         iam_args.update(self.creds)
         self.iam_client = boto3.client(**iam_args)
 
     def iam_role_exist(self, role_name: str):
+        """
+        Checks if an IAM role exists.
+
+        Args: 
+            role_name (str): Name of the role
+
+        Returns:
+            dict: Validation result
+        """
         LOGGER.info(f"Checking if IAM Role ({role_name}) exists.")
         _paginator = self.iam_client.get_paginator('list_roles')
         _iterator = _paginator.paginate()

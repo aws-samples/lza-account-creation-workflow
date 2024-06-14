@@ -12,7 +12,16 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def create_ssm_parameters(client: boto3.client, tags: list):
-    # Generate Docstring
+    """
+    Creates SSM Parameters for the AWS Account Tags
+
+    Args:
+        client (boto3.client): boto3 client
+        tags (list): list of AWS Account Tags
+    
+    Returns:
+        None
+    """
     for tag in tags:
         LOGGER.info(f"Creating SSM Parameter /account/tags/{tag['key']} with value {tag['value']}")
         client.put_parameter(
@@ -40,6 +49,16 @@ def create_ssm_parameters(client: boto3.client, tags: list):
 
 
 def delete_ssm_parameters(client: boto3.client, tags: list):
+    """
+    Deletes AWS Systems Manager (SSM) parameters for the given list of tags.
+
+    Args:
+        client (boto3.client): A Boto3 client for the AWS Systems Manager service.
+        tags (list): A list of tag names for which the corresponding SSM parameters should be deleted.
+
+    Returns:
+        None
+    """    
     for tag in tags:
         LOGGER.info(f"Deleting SSM Parameter /account/tags/{tag}")
         client.delete_parameter(

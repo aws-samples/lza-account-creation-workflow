@@ -1,0 +1,62 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Since AWS Organizations only pushed Cloudtrail events to us-east-1, this solution 
+  will allow AWS Organizations to push events to other regions using the targets event bridge.
+
+Parameters:
+  pMainEventRuleArn:
+    Type: String
+
+Resources:
+  rAccountTagToSsmParameterRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern: 
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - organizations.amazonaws.com
+          eventName:
+            - TagResource
+            - UntagResource
+        source:
+          - aws.organizations
+      State: "ENABLED"
+      Name: AccountTagToSsmParameter
+      Targets: 
+        - Arn: !Ref pMainEventRuleArn
+          Id: "AccountTagToSsmParameterCrossRegion"
+          RoleArn: !GetAtt rAccountTagToSsmParameterIamRole.Arn
+
+  rAccountTagToSsmParameterIamRole:
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "This role will be assumed to create SSM Parameter based on AWS Account tags. 
+              Role name is needed so that the role can be assumed."  
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: lza-account-creation-workflow-eventbus
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ['events.amazonaws.com']
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: AccountTagToSsmParameterEventRule
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource: 
+                  - !Ref pMainEventRuleArn

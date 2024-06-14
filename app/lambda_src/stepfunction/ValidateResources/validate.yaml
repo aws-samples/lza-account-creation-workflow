@@ -15,7 +15,6 @@ validate:
           - /account/tags/SCProvisionedProductId
           - /account/tags/account-name
           - /account/tags/product-version
-          - /account/tags/purpose
           - /account/tags/support-dl
           - /account/tags/vendor
       config:

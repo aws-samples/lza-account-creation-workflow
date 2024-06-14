@@ -16,10 +16,20 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    ''' 
-    This function creates an SSM Parameter in the target account based on Tags attached to the account within 
-    AWS Organizations. The SSM Parameters will be prefixed with "/account/tags/".
-    '''
+    """
+    Handles Lambda function triggered by AWS Organizations tag/untag events.
+
+    The function creates or deletes SSM Parameters in the target account 
+    based on tags attached to the account. The SSM Parameters will be 
+    prefixed with "/account/tags/".
+
+    Args:
+        event (dict): The event payload passed by Lambda
+        context (object): Lambda Context runtime methods and attributes
+
+    Returns:
+        None
+    """
     print(json.dumps(event))
 
     detail = event['detail']
@@ -33,22 +43,28 @@ def lambda_handler(event, context):
     ssm_args = {"service_name": "ssm"}
     ssm_args.update(assumed_creds)
     ssm_client = boto3.client(**ssm_args)
+    tags = []
 
     try:
         if event_name == 'TagResource':
+            for tag_info in detail['requestParameters']['tags']:
+                for key, value in tag_info.items():
+                    tag_info[key] = value.replace(':', '.')
+
+                tags.append(tag_info)
+
             LOGGER.info("Found TagResource EventName")
-            tags = detail['requestParameters']['tags']
             create_ssm_parameters(
                 client=ssm_client,
                 tags=tags
             )
 
         elif event_name == 'UntagResource':
+            tags = list(x.replace(':','.') for x in detail['requestParameters']['tagKeys'])
             LOGGER.info("Found UntagResource EventName")
-            tag_keys = detail['requestParameters']['tagKeys']
             delete_ssm_parameters(
                 client=ssm_client,
-                tags=tag_keys
+                tags=tags
             )
 
         else:

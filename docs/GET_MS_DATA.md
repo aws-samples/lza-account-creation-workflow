@@ -4,7 +4,7 @@ The following steps are only needed if you intend to use Microsoft Entra ID Grou
 
 ## Required Steps
 
-There are two Microsoft Entra ID Applications that will be needed to gather data using Graph API.
+There are two Microsoft Entra ID Applications that will be needed to gather data using Graph API. This data will be used as part of the Active Directory Group sync and Permission Set - Active Directory Group linking.
 
 - An application that is linked to AWS IAM Identity Center. In the screenshots this Application is named *LZA2*.
 

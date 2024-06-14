@@ -14,6 +14,20 @@ SNS_CLIENT = boto3.client('sns')
 
 
 def send_sns_message(error: str, account_name='test', topic=os.getenv('SNS_FAILURE_TOPIC')):
+    """
+    Sends an SNS message upon failure to create an AWS account.
+
+    The function logs the failure message and topic. It constructs
+    a subject and publishes the error message to the given SNS topic.
+
+    Args:
+        error (str): The error message text
+        account_name (str): The account name (default: 'test') 
+        topic (str): The SNS topic ARN (default: env var)
+
+    Returns:
+        None
+    """
     LOGGER.info(f"Sending failure message to topic: {topic}")
     subject = f"Attention !! Failure during creating AWS Account - {account_name}."
     message = error

@@ -48,9 +48,10 @@ def lambda_handler(event, context):
             account_info = event['AccountInfo']
 
         update_needed = account_info.get('ForceUpdate', 'false')
-       
-        # Create AccountEmail based on account name
-        account_info['AccountEmail'] = build_root_email_address(account_name=account_info['AccountName'])
+
+        # If not AccountEmail is provided generate one based on account name
+        if not account_info.get('AccountEmail'):
+            account_info['AccountEmail'] = build_root_email_address(account_name=account_info['AccountName'])
 
         if account_info.get('BypassCreation') == 'false':
             # Setup CodePipeline Class
@@ -64,7 +65,7 @@ def lambda_handler(event, context):
 
             code_commit_repo = GHCodeCommit(
                 code_commit_repo_name, boto3.session.Session())
-            
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 lambda_git = GHGit(tmpdir)
                 lambda_git.clone(code_commit_repo)
@@ -101,7 +102,7 @@ def lambda_handler(event, context):
                 payload['ServiceCatalogEvent']['ServiceCatalogRunStatus'] = "Update"
             else:
                 payload['ServiceCatalogEvent']['ServiceCatalogRunStatus'] = "Create"
-        
+
         elif account_info.get('BypassCreation') == 'true':
             LOGGER.info("Bypassing Account Creation...")
 

@@ -145,7 +145,7 @@ class GHGit:
                                          allow_unsafe_protocols=True)
         LOGGER.info('Repo cloned: %s', self._repo.remotes)
 
-    def create_commit(self, list_of_files_to_commit: List[str], commit_message: str, commit_author: str = 'Create_Account_Automation', 
+    def create_commit(self, list_of_files_to_commit: List[str], commit_message: str, commit_author: str = 'Create_Account_Automation',
                       commit_email: str = 'do-not-reply@amazon.com') -> bool:
         """Create a commit in the local git branch
 

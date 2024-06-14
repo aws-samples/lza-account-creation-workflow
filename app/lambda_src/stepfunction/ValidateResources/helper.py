@@ -12,6 +12,11 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def get_services_to_validate():
-    """Loads yaml list of booleans for services that should be validated"""
+    """
+    Loads validation configuration from YAML file.
+
+    Returns a list of booleans specifying which AWS services 
+    should be validated based on the contents of the YAML file.
+    """
     with open('./validate.yaml', 'rb') as file:
         return yaml.safe_load(file)

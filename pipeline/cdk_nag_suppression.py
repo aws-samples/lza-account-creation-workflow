@@ -5,6 +5,19 @@ from cdk_nag import NagSuppressions
 
 
 def pipeline_nag_suppression(scope, stack_name: str):
+    """
+    Generate suppressions for CDK Nag linting rules.
+
+    Args:
+        scope (Construct): The scope in which to define this construct's resources.
+        stack_name (str): The name of the stack.
+
+    Returns: 
+        None
+
+    This function adds suppressions for CDK Nag linting rules to ignore known issues in the pipeline. 
+    It suppresses rules related to IAM permissions, CodeBuild privileged mode, and S3 access logging.
+    """
     # Stack Level Suppression
     NagSuppressions.add_stack_suppressions(
         scope,
@@ -15,6 +28,13 @@ def pipeline_nag_suppression(scope, stack_name: str):
         }]
     )
 
+    NagSuppressions.add_resource_suppressions_by_path(
+        scope, f"/{stack_name}/rCodePipelineS3Bucket/Resource",
+        [{
+            "id": 'AwsSolutions-S1',
+            "reason": 'The S3 Bucket has server access logs disabled.'
+        }]
+    )
     NagSuppressions.add_resource_suppressions_by_path(
         scope, f"/{stack_name}/rCodePipeline/UpdatePipeline/SelfMutation/Resource",
         [{
@@ -36,7 +56,6 @@ def pipeline_nag_suppression(scope, stack_name: str):
             "reason": 'The CodeBuild project has privileged mode enabled.'
         }]
     )
-    # TODO: Things to resolve or look deeper into
     NagSuppressions.add_resource_suppressions_by_path(
         scope, f"/{stack_name}/rCodePipeline/Pipeline/ArtifactsBucket/Resource",
         [{

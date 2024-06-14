@@ -1,7 +1,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-# To use SSM parameters within this configuration follow this format SSM:<<parameter_name>> (ex. SSM:/base/test)
+# To use SSM parameters within this configuration follow this 
+#   format SSM:<<parameter_name>> (ex. SSM:/base/test)
+
+# To use Secrets Manager parameters within this configuration follow this 
+#   format Secret:<<secret_name>>.<<dictionary_value>> (ex. Secret:name.value)
 
 # List of tags to be added to the CloudFormation Stacks
 tags:
@@ -33,33 +37,44 @@ appInfrastructure:
 
   sns:
     accountCreationFailure: 
-      - test@example.com
+      - JohnSmith@example.com
 
   ses: 
-    accountCompletionNotification: true
-    accountCompletionFromEmail: test@example.com # Email that the request will come from and group that will review the request
+    accountCompletionNotification: True
+    accountCompletionFromEmail: JohnSmith@example.com # Email that the request will come from and group that will review the request
     accountCompletionCcList: ""
     accountCompletionBlindCcList: ""
 
+  stepFunctionName: LZA-CreateAccount
+  
   # LZA Level Variables 
   lzaPipelineName: AWSAccelerator-Pipeline
   lzaRepositoryName: aws-accelerator-config
   
   # Decommissioning Solution Varaibles
-  accountDecommissionProject: Account-Decommission
+  #   This config is used to check to make sure that the Decommissioning CodeBuild 
+  #   Project is not running before the account creation begins (Lambda: CheckForRunningProcesses)
+  accountDecommissionProject: LZA-Account-Decommission
 
   # IAM Roles used for validation and tagging
   accountTagToSsmParameterRole: account-tagging-to-ssm-parameter
   lzaAccountValidationRole: account-creation-validation
   lzaConfigLogValidationRole: config-log-validation
 
-  # The URL used for managed accounts to login, this is sent to the Account Requester in the completion email
-  ssoLoginUrl: https://d-123456789.awsapps.com/start/
+  # The URL used for managed accounts to login, the default Login Url can be found under the "Users and access" section within AWS Control Tower.
+  ssoLoginUrl: https://d-012345679.awsapps.com/start/
 
   # Used to create root email address for AWS Accounts - << rootEmailPrefix >>+<< account_name >>@<< rootEmailDomain >>
-  rootEmailPrefix: test
+  rootEmailPrefix: JohnSmith
   rootEmailDomain: example.com
 
-  # Account Admin Permission Set Name
-  enableAzureADIntegration: true  
-  graphApiSecretName: GraphApiSecret
+  # Use ApiGateway to start StepFunction
+  useApiGateway: True
+  apiGatewayName: CreateAccount
+  apiGatewayCloudWatchLogs: True
+  apiGatewayUser: ""
+
+  # Microsoft AD Inegration configuration
+  enableAzureADIntegration: True
+  useGraphApiSync: False                  # This will use GrapApiSync to update the AWS Identity Center and Azure EntraID.
+  graphApiSecretName: GraphApiSecret      # This is only needed if "useGraphApiSync" is set to true

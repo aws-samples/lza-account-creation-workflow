@@ -1,1 +1,4 @@
-boto3==1.28.82
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+boto3==1.34.86

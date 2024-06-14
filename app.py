@@ -3,8 +3,8 @@
 
 # !/usr/bin/env python3
 
-import yaml
 import os
+import yaml
 import aws_cdk as cdk
 from pipeline.pipeline_stack import PipelineStack
 

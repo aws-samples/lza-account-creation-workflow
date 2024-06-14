@@ -20,14 +20,18 @@ class AccountTagsValidationException(Exception):
 
 @dataclass
 class ValidateAccountTags:
-    """Helper class to validate that account tags have been set
+    """
+    Validates the tags on an AWS account.
+
+    The class assumes an IAM role to make API calls. It contains
+    a method to check if the tags on an account match the expected tags.
     """
     account_id: str
     tags: List[dict]
     org_client: boto3.client = boto3.client('organizations')
 
     def _get_account_tags(self):
-        """Get the current tags on the account"""
+        """Get the tags on an account"""
         return self.org_client.list_tags_for_resource(
             ResourceId=self.account_id
         ).get("Tags", [])

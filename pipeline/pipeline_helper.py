@@ -8,7 +8,8 @@ from pathlib import Path
 
 
 def create_archive(ignored_files_directories: list, zip_name='zip_file') -> str:
-    """This definition will update files based on the fileReplacement key within the config.yaml file
+    """
+    This definition will update files based on the fileReplacement key within the config.yaml file
     then this function will zip the contents.
 
     Args:

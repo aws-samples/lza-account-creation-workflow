@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 
 import os
+import re
 import logging
 import boto3
 
@@ -12,19 +13,40 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 class ValidateSsm:
-    """Class to validate SSM Paramaeter
+    """
+    Validates SSM Parameters in AWS accounts.
+
+    The class assumes an IAM role to make API calls. It contains
+    a method to check if a given SSM parameter exists, returning the
+    validation result.
     """
     creds = {}
 
     def __init__(self, assumed_creds: dict):
+        # initialization logic
         self.creds = assumed_creds
         ssm_args = {"service_name": "ssm"}
         ssm_args.update(self.creds)
         self.ssm_client = boto3.client(**ssm_args)
 
     def ssm_parameter_exist(self, parameter_name: str):
+        """
+        Checks if an SSM parameter exists.
+
+        Args: 
+            parameter_name (str): Name of the parameter
+
+        Returns:
+            dict: Validation result
+        """
         LOGGER.info(f"Checking if SSM Parameter ({parameter_name}) exists.")
-        _parameter = self.ssm_client.get_parameter(Name=parameter_name)
+        try:
+            _parameter = self.ssm_client.get_parameter(Name=parameter_name)
+
+        except Exception as err:
+            if re.search(r'((ParameterNotFound))', str(err)):
+                LOGGER.warning(str(err))
+                _parameter = None
 
         if not _parameter:
             status = "Failed"

@@ -19,7 +19,20 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """Lambda function entry"""
+    """
+    Handles Lambda function triggered by AWS Step Functions.
+
+    The function syncs Azure Active Directory groups to AWS Identity 
+    Center by looking up group IDs and adding them to the SSO 
+    application. It returns the updated payload.
+
+    Args:
+        event (dict): The event payload containing account info
+        context (object): Lambda Context runtime methods and attributes
+
+    Returns:
+        dict: The updated payload
+    """
     try:
         LOGGER.info(json.dumps(event))
 
@@ -43,7 +56,11 @@ def lambda_handler(event, context):
         LOGGER.info("Looking up Azure Active Directory Group Id")
         group_id_mapping = {}
 
-        for ad_group_name in list(account_info["ADIntegration"].values()):
+        # List of dictionaries
+        # Ex. [{"PermissionSetName":"CustomerAccountAdmin","ActiveDirectoryGroupName":"platform-admin"}]
+        ad_group_names = list(x['ActiveDirectoryGroupName'] for x in account_info["ADIntegration"])
+
+        for ad_group_name in ad_group_names:
             try:
                 LOGGER.info("Getting Azure Group Id for Group (%s)", ad_group_name)
                 group_api.get_group_info_from_name(ad_group_name)

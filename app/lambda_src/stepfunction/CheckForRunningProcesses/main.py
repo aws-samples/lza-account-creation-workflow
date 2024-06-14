@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from helper import (
-    decommission_process_running, 
+    decommission_process_running,
     pipeline_running
 )
 
@@ -16,14 +16,19 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """This function will
+    """
+    Checks for running processes as part of an AWS Step Functions workflow.
+
+    The function extracts account info from the event and checks 
+    for running CodeBuild and CodePipeline processes by name. It 
+    returns a payload containing the check results.
 
     Args:
-        event (dict): Event information passed in by the AWS Step Functions
-        context (object): Lambda Function context information
+        event (dict): The event payload from Step Functions
+        context (object): Lambda Context runtime methods and attributes
 
-    Returns:
-        dict: Payload values that will be passed to the next step in the Step Function
+    Returns: 
+        dict: Payload with check results to pass to next step
     """
     print(json.dumps(event))
     payload = {}
@@ -53,7 +58,7 @@ def lambda_handler(event, context):
         # Add the AccountInfo to the paylaod
         payload['AccountInfo'] = account_info
         payload['ForceUpdate'] = str(account_info.get('ForceUpdate', 'false'))
-        
+
         LOGGER.info(f"Payload: {payload}")
         return payload
 
