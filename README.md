@@ -12,7 +12,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 
 ### Step Function Workflow for Account Creation
 
-![Step Function workflow diagram](images/stepfunctions_graph.png)
+<img src="images/stepfunctions_graph.png" style="background-color: white;">
 
 ### Folder Structure
 
@@ -112,6 +112,8 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
         - deploymentTargets:
             organizationalUnits:
               - Root
+            excludedAccounts:
+              - Management              
           description: IAM Role to allow Account Validation
           name: lza-account-creation-validation
           regions:
@@ -349,12 +351,22 @@ Result
 Pass
 
 ```bash
+# Using the AWS Step Function Execution Name to get the status
 awscurl --service execute-api \
   --region ${AWS_REGION} \
   --access_key ${AWS_ACCESS_KEY_ID} \
   --secret_key ${AWS_SECRET_ACCESS_KEY} \
   --security_token ${AWS_SESSION_TOKEN} \
   -X GET ${API_GATEWAY_ENDPOINT}get_execution_status?execution=<<STEP_FUNCTION_EXECUTION_NAME>>
+
+# OR you can use the AWS Step Function Execution ARN to get the status
+awscurl --service execute-api \
+  --region ${AWS_REGION} \
+  --access_key ${AWS_ACCESS_KEY_ID} \
+  --secret_key ${AWS_SECRET_ACCESS_KEY} \
+  --security_token ${AWS_SESSION_TOKEN} \
+  -X GET ${API_GATEWAY_ENDPOINT}get_execution_status?execution_arn=<<STEP_FUNCTION_EXECUTION_ARN>>
+
 ```
 
 Pass Result

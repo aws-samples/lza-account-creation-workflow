@@ -31,7 +31,7 @@ def lambda_handler(event, context):
     sf_client = boto3.client(service_name='stepfunctions')
 
     try:
-        # Get StepFunction Execution or ExecutionArn from API Parameter 
+        # Get StepFunction Execution or ExecutionArn from API Parameter
         execution_arn = event['queryStringParameters'].get('execution_arn')
         execution = event['queryStringParameters'].get('execution')
 
@@ -39,7 +39,7 @@ def lambda_handler(event, context):
             raise Exception("Please specify \"execution_arn\" or \"execution\" as API Parameter.")
 
         # Setup StepFunction Execution Arn if one is not setup
-        if not execution_arn: 
+        if not execution_arn:
             execution = event['queryStringParameters'].get('execution')
             execution_arn = f"{os.environ['SF_EXECUTION_ARN_BASE']}:{execution}"
 
@@ -60,7 +60,7 @@ def lambda_handler(event, context):
 
             current_task = sm_exec_hist_response['events'][0].get('stateEnteredEventDetails', \
                 {"name": "State machines is still starting, try again in a few seconds."}).get('name')
-            response_body['CurrentExecutionTask'] = current_task 
+            response_body['CurrentExecutionTask'] = current_task
 
         if response_body['Status'] == 'FAILED':
             response_body['Cause'] = sm_desc_response['cause']

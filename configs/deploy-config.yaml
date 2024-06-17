@@ -27,7 +27,6 @@ deployInfrastructure:
     ignoreFilesDirectoriesCodeCommit: # Ignore specific files and directories during CodeCommit creation
       - .python-version # This file caused the cdk synth to fail in the pipeline
 
-
 appInfrastructure:
   cloudformation:
     stackName: lza-account-creation-workflow-application
