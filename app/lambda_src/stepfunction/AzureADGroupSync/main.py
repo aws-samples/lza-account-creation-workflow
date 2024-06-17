@@ -9,7 +9,7 @@ from ms_graph_api import (
     MsGraphApiConnection,
     MsGraphApiGroups,
     Synchronizer,
-    GraphApiRequestException,
+    GraphApiRequestException
 )
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
