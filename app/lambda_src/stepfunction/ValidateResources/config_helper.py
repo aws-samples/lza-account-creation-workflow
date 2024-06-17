@@ -15,7 +15,18 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 def is_config_logging_configured(account_id: str, log_acct_role_name: str, log_account_name: str):
     """
-    Checks if AWS Config is writing to the Log Archive account for vended accounts
+    Checks if AWS Config is writing logs to the log archive account.
+
+    Validates that AWS Config logs for the given account are being
+    written to the designated log archive account and S3 bucket.
+
+    Args:
+        account_id (str): ID of the account to check
+        log_acct_role_name (str): Role name in log archive account
+        log_account_name (str): Name of log archive account
+
+    Returns:
+        dict: Status of the log validation check
     """
     LOGGER.info(
         f"Beginning AWS Config log validation for account {account_id}")
@@ -66,7 +77,8 @@ def is_config_logging_configured(account_id: str, log_acct_role_name: str, log_a
 
 
 def get_ssm_parameter(parameter_key: str):
-    """  Get SSM Parameter Value
+    """  
+    Get SSM Parameter Value
 
     Args:
         parameter_key (str): SSM Parameter Key to get value for

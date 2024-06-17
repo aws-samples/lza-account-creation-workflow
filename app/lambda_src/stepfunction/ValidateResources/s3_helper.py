@@ -12,11 +12,17 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 class ValidateS3:
-    """Class to validate S3
+    """
+    Validates S3 buckets in AWS accounts.
+
+    The class assumes an IAM role to make API calls. It contains
+    a method to check if a given S3 bucket exists, returning the
+    validation result.
     """
     creds = {}
 
     def __init__(self, assumed_creds: dict, account: str, region: str = os.environ['AWS_DEFAULT_REGION']):
+        # initialization logic
         self.account = account
         self.region = region
         self.creds = assumed_creds
@@ -25,6 +31,15 @@ class ValidateS3:
         self.s3_client = boto3.client(**s3_args)
 
     def s3_bucket_exist(self, bucket_name: str):
+        """
+        Checks if an S3 bucket exists.
+
+        Args: 
+            bucket_name (str): Name of the bucket
+
+        Returns:
+            dict: Validation result
+        """
         # update bucket name to reflect account name and region
         bucket_name.replace("{{ account }}", self.account)
         bucket_name.replace("{{ region }}", self.region)

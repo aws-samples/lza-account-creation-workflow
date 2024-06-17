@@ -13,6 +13,7 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 def decommission_process_running(project_name: str) -> list:
     """Checks to see if the decommission CodeBuild project is running
+
     Args:
         project_name (str): CodeBuild Project that runs the decommissioning script
 
@@ -40,6 +41,7 @@ def decommission_process_running(project_name: str) -> list:
 
 def pipeline_running(pipeline_name: str) -> list:
     """Check if there are other executions of the pipeline currently running
+    
     Args:
         pipeline_name (str): CodePipeline Name
 

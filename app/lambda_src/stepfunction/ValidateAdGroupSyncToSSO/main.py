@@ -23,22 +23,39 @@ class ExceededWaitTimeLimit(Exception):
 
 
 def lambda_handler(event, context):
+    """
+    Validates Active Directory group sync to AWS SSO.
+
+    The function checks if AD groups from the payload have 
+    synced to AWS SSO. It retries if not found, incrementing 
+    a wait count. Returns the updated payload.
+
+    Args:
+        event (dict): Event payload containing account info
+        context (object): Lambda Context runtime methods  
+
+    Returns:
+        dict: Updated payload with sync status
+    """
     LOGGER.info(json.dumps(event))
     try:
         payload = event['Payload']
-        group_names = list(payload['AccountInfo']['ADIntegration'].values())
+
+        # List of dictionaries
+        # Ex. [{"PermissionSetName":"CustomerAccountAdmin","ActiveDirectoryGroupName":"platform-admin"}]
+        group_names = list(x['ActiveDirectoryGroupName'] for x in payload['AccountInfo']["ADIntegration"])
 
         identity_store_id, _ = get_sso_instance_id_and_arn()
         LOGGER.info('Identity store id: %s', identity_store_id)
 
-        if not (payload.get('AzureAD')):
+        if not payload.get('AzureAD'):
             payload['AzureAD'] = {}
             payload['AzureAD']['WaitCount'] = 0
 
         try:
             for group_name in group_names:
                 LOGGER.info('Checking Group Sync for GroupName: %s', group_name)
-                group_guid = lookup_group_guid_from_sso(
+                lookup_group_guid_from_sso(
                     group_name=group_name,
                     identity_store_id=identity_store_id
                 )

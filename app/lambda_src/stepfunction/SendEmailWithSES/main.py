@@ -129,8 +129,9 @@ def lambda_handler(event, context):
         email_data.send_email()
         payload['EmailSentToOwner'] = True
         return payload
+
     except Exception as general_exception:
         LOGGER.error(
             'There was a problem sending account information to the account owner with SES')
         LOGGER.error(str(general_exception))
-        raise TypeError from general_exception
+        raise TypeError(str(general_exception)) from general_exception

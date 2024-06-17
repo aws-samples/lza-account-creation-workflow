@@ -7,8 +7,12 @@ import aws_cdk as cdk
 from constructs import Construct
 import cdk_nag
 from aws_cdk import (
+    Stack,
+    RemovalPolicy,
     pipelines,
-    aws_codecommit as codecommit
+    aws_codecommit as codecommit,
+    aws_iam as iam,
+    aws_s3 as s3
 )
 from pipeline.pipeline_app_stage import PipelineAppStage
 from pipeline.pipeline_helper import create_archive
@@ -18,7 +22,31 @@ from pipeline.cdk_nag_suppression import pipeline_nag_suppression
 class PipelineStack(cdk.Stack):
 
     def __init__(self, scope: Construct, construct_id: str, config: dict, **kwargs) -> None:
+        """
+        Initialize a new instance of the stack.
+
+        Args:
+            scope (Construct): The scope in which to define this construct's resources.
+            construct_id (str): Uniquely identifies this construct within its scope. 
+            config (dict): Configuration dictionary.
+            **kwargs: Additional arguments passed to the construct base class.
+        """
         super().__init__(scope, construct_id, **kwargs)
+
+        # Get current stack name
+        stack = Stack.of(self)
+        region = stack.region
+        account = stack.account
+        pipeline_name = config['deployInfrastructure']['codepipeline']['pipelineName']
+
+        # Create an S3 bucket CodePipeline Artifacts
+        self.pipeline_bucket = s3.Bucket(
+            self, "rCodePipelineS3Bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            bucket_name=f"{pipeline_name}-{region}-{account}",
+            enforce_ssl=True
+        )
 
         # Create a zip file to all CodeCommit to import
         archive_file = create_archive(
@@ -39,11 +67,22 @@ class PipelineStack(cdk.Stack):
 
         pipeline = pipelines.CodePipeline(
             self, "rCodePipeline",
-            pipeline_name=config['deployInfrastructure']['codepipeline']['pipelineName'],
+            pipeline_name=pipeline_name,
             docker_enabled_for_self_mutation=True,
             docker_enabled_for_synth=True,
             enable_key_rotation=True,
             cross_account_keys=True,
+            code_build_defaults=pipelines.CodeBuildOptions(
+                role_policy=[
+                    iam.PolicyStatement(
+                        actions=[
+                            "apigateway:GET"
+                        ],
+                        resources=["*"],
+                        effect=iam.Effect.ALLOW
+                    )
+                ]
+            ),
             synth=pipelines.ShellStep(
                 "Synth",
                 input=source,

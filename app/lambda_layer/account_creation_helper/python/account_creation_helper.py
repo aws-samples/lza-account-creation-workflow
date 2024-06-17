@@ -13,19 +13,19 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 class CodeBuildExecutionInfoNotFound(Exception):
-    """Custom exception"""
+    """Exception raised when CodeBuild execution info is not found."""
 
 
 def assume_role_arn(role_arn, role_session_name=os.getenv('AWS_LAMBDA_FUNCTION_NAME', "assume_role_arn_function")):
-    """Assumes the provided role name in the provided account number
+    """
+    Assume the provided IAM role and return AWS credentials.
 
     Args:
-        role_arn (str): Arn of the IAM Role to assume
-        role_session_name (str, optional): The name you'd like to use for the session
-            (suggested to use the lambda function name)
+        role_arn (str): ARN of the IAM role to assume.
+        role_session_name (str): Name for the assumed role session.
 
     Returns:
-        dict: Returns standard AWS dictionary with credential details
+        dict: AWS credentials for the assumed role.
     """
     LOGGER.info(f"Assuming Role:{role_arn}")
     sts_client = boto3.client(service_name='sts')
@@ -45,26 +45,32 @@ def assume_role_arn(role_arn, role_session_name=os.getenv('AWS_LAMBDA_FUNCTION_N
 
 @dataclass
 class HelperCodePipeline:
-    """Helper class for working with AWS CodePipeline"""
+    """Helper class for working with AWS CodePipeline."""
     pipeline_name: str
 
     def __post_init__(self):
         self.cp_client = boto3.client('codepipeline')
 
     def get(self):
-        """Get information about the pipeline"""
+        """
+        Get information about the pipeline. 
+
+        Returns:
+            dict: Pipeline information.
+        """
         return self.cp_client.get_pipeline(
             name=self.pipeline_name
         )
 
     def status(self, execution_id: str) -> str:
-        """Get the status of a pipeline execution
+        """
+        Get the status of a pipeline execution.
 
         Args:
-            execution_id (str): The CodePipeline execution ID for a released run
+            execution_id (str): The CodePipeline execution ID.
 
         Returns:
-            str: The status of the execution 'Cancelled'|'InProgress'|'Stopped'|'Stopping'|'Succeeded'|'Superseded'|'Failed'
+            str: The status of the execution.
         """
         _execution = self.cp_client.get_pipeline_execution(
             pipelineName=self.pipeline_name,
@@ -73,23 +79,25 @@ class HelperCodePipeline:
         return _execution['pipelineExecution']['status']
 
     def start_execution(self) -> str:
-        """Start the CodePipeline release execution
+        """
+        Start the CodePipeline release execution.
 
         Returns:
-            str: The CodePipeline Execution ID
+            str: The CodePipeline execution ID.
         """
         return self.cp_client.start_pipeline_execution(
             name=self.pipeline_name
         )['pipelineExecutionId']
 
     def get_failed_action(self, execution_id: str) -> dict:
-        """Retrieve information from a pipeline execution about an action that is in failed state
+        """
+        Retrieve information about a failed action in a pipeline execution.
 
         Args:
-            execution_id (str): The CodePipeline exectution ID
+            execution_id (str): The CodePipeline execution ID.
 
-        Returns:
-            dict: Dictionary of the action information
+        Returns:  
+            dict: Information about the failed action.
         """
         _executed_actions = self.cp_client.list_action_executions(
             pipelineName=self.pipeline_name,
@@ -105,7 +113,7 @@ class HelperCodePipeline:
 
 @dataclass
 class HelperCodeBuild:
-    """Helper class to work with failed CodeBuild executions"""
+    """Helper class for working with failed CodeBuild executions."""
     build_id: str
 
     def __post_init__(self):
@@ -113,23 +121,25 @@ class HelperCodeBuild:
         self.build_info = self._get_codebuild_output()
 
     def _get_codebuild_output(self) -> dict:
-        """Get output of information on build from build ID
+        """
+        Get output information for a CodeBuild execution.
 
         Returns:
-            dict: Build execution information
+            dict: CodeBuild execution information.
         """
         LOGGER.debug('Getting info for build id: %s', self.build_id)
         return next(
             iter(self.cb_client.batch_get_builds(ids=[self.build_id]).get('builds')), None)
 
     def get_failed_phase_info(self) -> dict:
-        """Get information about phase with FAILED status from CodeBuild execution
+        """
+        Get information about a failed phase in a CodeBuild execution.
 
         Raises:
-            CodeBuildExecutionInfoNotFound
+            CodeBuildExecutionInfoNotFound: If no failed phase is found.
 
         Returns:
-            dict: Phase information
+            dict: Information about the failed phase.
         """
         LOGGER.debug('Gathering failed phase')
         if self.build_info:

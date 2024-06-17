@@ -6,7 +6,16 @@ from aws_cdk import (
 )
 
 def replace_ssm_in_config(scope, temp_config: dict) -> dict:
-    """This function will search within a dict config file for SSM: and will replace the value with the SSM value"""
+    """
+    Replace SSM parameter values in a configuration dictionary.
+
+    Args:
+        scope (Construct): The scope in which to define this construct's resources.
+        temp_config (dict): The configuration dictionary to replace SSM parameter values in.
+
+    Returns:
+        dict: The configuration dictionary with SSM parameter values replaced.
+    """
     for key1, val1 in temp_config.items():
         if 'SSM:' in val1:
             temp_config[key1] = ssm.StringParameter.value_from_lookup(scope, val1.replace('SSM:', ''))

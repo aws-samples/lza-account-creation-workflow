@@ -1,0 +1,27 @@
+{
+    "account_name": "lza-test-01",
+    "account_email": "johnsmith+lzatest01@example.com",
+    "support_dl": "johnsmith@example.com",
+    "managed_org_unit": "Workloads/Workload-1",
+    "ad_integration": [
+        {
+            "PermissionSetName": "CustomerAccountAdmin",
+            "ActiveDirectoryGroupName": "platform-admin"
+        },
+        {
+            "PermissionSetName": "CustomerAccountDev",
+            "ActiveDirectoryGroupName": "workload1-app1"
+        }
+    ],
+    "force_update": "true",
+    "bypass_creation": "false",
+    "account_tags": [
+        {
+            "Key": "Environment",
+            "Value": "Dev"
+        }, {
+            "Key": "DeploymentMethod",
+            "Value": "ApiGateway"
+        }
+    ]
+}

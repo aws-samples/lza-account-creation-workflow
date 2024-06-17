@@ -28,6 +28,12 @@ class MissingEnvironmentVariableException(Exception):
 
 
 def check_delay() -> int:
+    """Helper to retrieve default delay for polling.
+    
+    Returns:
+        int: Default delay in seconds
+    """
+
     return 5
 
 
@@ -58,6 +64,9 @@ def get_provisioning_artifact_id(product_name: str, client: boto3.client) -> str
 
     Returns:
         str: Service Catalog Provisioning Artifact ID
+
+    Raises:
+        KeyError: If no default artifact is found
     """
     product_info = client.describe_product(Name=product_name)
     LOGGER.info(product_info)
@@ -143,6 +152,14 @@ def create_update_provision_product(
 
 
 def list_children_ous(parent_id: str):
+    """Lists the organizational units (OUs) that are children of the given parent ID.
+
+    Args:
+        parent_id (str): The ID of the parent OU or account to list children for.
+
+    Returns:
+        dict: A dictionary mapping child OU names to IDs.
+    """
     ou_info = {}
     org = boto3.client("organizations")
     LOGGER.info(f"Getting Children Ous for Id:{parent_id}")
@@ -162,7 +179,7 @@ def tags_to_dict(tags):
         tags (list of dict): Tag structure returned from an AWS call
 
     Returns:
-        dict: of tags
+        dict: Tags mapped from tag name to tag value
     """
     output = {}
     if tags:
@@ -177,6 +194,7 @@ def update_account_config_file(
     path_to_file: str, account_info: dict, force_update: bool = False
 ) -> None:
     """Update LZA account config file with account info if not already present
+    
 
     Args:
         path_to_file (str): Path to the account-config.yaml file to update
@@ -219,8 +237,8 @@ def update_account_config_file(
             "config should be updated or the account name should be changed in the new creation"
         )
         raise MatchingAccountNameInConfigException(
-            "The accounts-config.yaml already contains an account with the name of %s and the force update "
-            f"flag is set to False {config_info['name']}"
+            f"The accounts-config.yaml already contains an account with the name of {config_info['name']} "
+            f"and the force update flag is set to False"
         )
     else:
         account_config["workloadAccounts"].append(config_info)
@@ -236,8 +254,11 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
         path_to_file (str): Path to organization-config.yaml file or other name
         target_ou_name (str): Target OU for the account creation
 
+    Returns:
+        None
+        
     Raises:
-        MissingOrganizationalUnitConfigException: _description_
+        MissingOrganizationalUnitConfigException: If OU not found
     """
     with open(path_to_file, encoding="utf8") as org_config_file:
         org_config = yaml.safe_load(org_config_file)
@@ -254,8 +275,7 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
 
 def build_root_email_address(account_name: str) -> str:
     """Build the root email address from prefix and domain
-    environment variables and account name
-
+    
     Args:
         account_name (str): The name of the account being created
 
@@ -264,6 +284,10 @@ def build_root_email_address(account_name: str) -> str:
 
     Raises:
        MissingEnvironmentVariableException: If the prefix or domain environment vars are missing
+        
+    Builds root email from env vars and account name. Removes spaces 
+        and special characters.
+    environment variables and account name
     """
     try:
         prefix = os.environ["ROOT_EMAIL_PREFIX"]
@@ -282,13 +306,16 @@ def build_root_email_address(account_name: str) -> str:
 
 def decommission_process_running(
     project_name: str = "lzac-account-decommission", cb_client: boto3.client = None
-):
+) -> list:
     """Checks to see if the decommission CodeBuild project is running
+    
     Args:
         project_name (str): CodeBuild Project that runs the decommissioning script
 
     Returns:
         list: Results for all IN_PROGRESS CodeBuilds jobs
+
+    Makes CodeBuild API calls to check running builds for the project.
     """
     if not cb_client:
         cb_client = boto3.client("codebuild")
@@ -309,8 +336,14 @@ def decommission_process_running(
 
 @dataclass
 class HelperCodePipeline:
-    """Helper class for working with AWS CodePipeline"""
-
+    """Helper class for working with AWS CodePipeline
+    
+    Attributes:
+        pipeline_name (str): Name of the CodePipeline
+        cp_client (boto3.client): Boto3 CodePipeline client
+        
+    Helper methods for common CodePipeline operations.
+    """
     pipeline_name: str
     cp_client: boto3.client = boto3.client("codepipeline")
 

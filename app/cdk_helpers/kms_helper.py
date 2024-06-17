@@ -7,11 +7,23 @@ from aws_cdk import (
 
 
 def create_kms_keys(scope) -> dict:
+    """
+    Create KMS keys and return a dictionary of keys.
+    
+    This function creates KMS keys for SNS topics and Lambda functions
+    and returns a dictionary with the created keys.
+    
+    Args:
+        scope (Construct): The scope in which to define this construct's resources.
+
+    Returns:
+        dict: A dictionary containing the created KMS keys (IKey).
+    """
     i_kms_keys = {}
 
     # SNS Topic KMS Key
     i_sns_key = kms.Key(
-        scope, f"rSnsTopicKmsKey",
+        scope, "rSnsTopicKmsKey",
         enable_key_rotation=True
     )
     i_sns_key.add_alias("alias/accountcreation/kms/snstopic/key")
@@ -19,7 +31,7 @@ def create_kms_keys(scope) -> dict:
 
     # Lambda KMS Key
     i_sns_key = kms.Key(
-        scope, f"rLambdaKmsKey",
+        scope, "rLambdaKmsKey",
         enable_key_rotation=True
     )
     i_sns_key.add_alias("alias/accountcreation/kms/lambda/key")

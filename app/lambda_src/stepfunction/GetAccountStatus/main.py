@@ -61,6 +61,19 @@ def search_provisioned_products(search_pp_name, client: boto3.client) -> dict:
 
 
 def get_service_catalog_info(payload: dict) -> dict:
+    """
+    Gets account information from AWS Service Catalog.
+
+    Searches Service Catalog for a provisioned product matching 
+    the account name. Returns account details if found, or raises
+    an exception if not found or product has an error status.
+
+    Args:
+        payload (dict): Event payload containing account info
+
+    Returns:
+        dict: Details of the provisioned product including AccountId
+    """
     outputs = {}
 
     # Look for account name in Service Catalog Provisioned Product list

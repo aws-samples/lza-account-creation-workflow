@@ -18,6 +18,20 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
+    """
+    Handles a Lambda function that assigns permissions to AWS accounts.
+
+    The function is passed an event containing payload data and 
+    assigns permissions to the account based on the AD integration 
+    configuration in the payload.
+
+    Args:
+        event (dict): The event payload containing account info
+        context (object): Lambda Context runtime methods and attributes
+
+    Returns:
+        dict: The updated payload with account assignments appended
+    """
     LOGGER.info(json.dumps(event))
 
     try:
@@ -25,27 +39,25 @@ def lambda_handler(event, context):
         account_info = payload['AccountInfo']
         account_id = payload['Account']['Outputs']['AccountId']
         ad_integration = account_info['ADIntegration']
-        group_mappings = payload['AD_Group_Mapping']
-        
-        LOGGER.info(f"AD Group Mappings: {group_mappings}")
+
         payload['AccountAssignments'] = []
 
         identity_store_id, instance_arn = get_sso_instance_id_and_arn()
         LOGGER.info('Identity store id: %s', identity_store_id)
         LOGGER.info('Instance ARN: %s', instance_arn)
 
-        for permission_set_name, ad_group_name in ad_integration.items():
-            LOGGER.info('Creating account assignment for Permission Set (%s) with AAD Group (%s) in %s', 
-                        permission_set_name, ad_group_name, account_id)
-            
+        for item in ad_integration:
+            LOGGER.info('Creating account assignment for Permission Set (%s) with AAD Group (%s) in %s',
+                        item['PermissionSetName'], item['ActiveDirectoryGroupName'], account_id)
+
             group_guid = lookup_group_guid_from_sso(
-                group_name=ad_group_name,
+                group_name=item['ActiveDirectoryGroupName'],
                 identity_store_id=identity_store_id
             )
             LOGGER.info('Group GUID: %s', group_guid)
 
             permission_set_arn = get_permission_set_arn(
-                permission_set_name=permission_set_name,
+                permission_set_name=item['PermissionSetName'],
                 instance_arn=instance_arn
             )
             LOGGER.info('Permission set ARN: %s', permission_set_arn)

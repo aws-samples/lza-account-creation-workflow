@@ -32,12 +32,6 @@ def lambda_handler(event, context):
 
     try:
         payload = event.get('Payload')
-
-        if payload.get('DryRun'):
-            LOGGER.info(" *** DRY RUN : SUCCESS ***")
-            payload['ValidationStatus'] = 'COMPLETED'
-            return payload
-
         LOGGER.info("Getting Account Id and Name")
         account_number = payload['Account']['Outputs']['AccountId']
         account_name = payload['AccountInfo']['AccountName']
@@ -50,7 +44,6 @@ def lambda_handler(event, context):
         )
 
         # Create account alias
-        # Does LZA do this?
         create_account_alias(
             creds=assumed_creds,
             alias=account_name.lower()
@@ -59,12 +52,11 @@ def lambda_handler(event, context):
         # Create tags within AWS Organizations on AWS Account
         prov_prod_id = payload['Account']['Outputs']['ProvisionedProductId']
 
-        tags = [
-            {
-                'Key': 'SCProvisionedProductId',
-                'Value': prov_prod_id
-            }
-        ]
+        tags = [{
+            'Key': 'SCProvisionedProductId',
+            'Value': prov_prod_id
+        }]
+
         tags.extend(payload['AccountInfo'].get('AccountTags', []))
         LOGGER.info('Adding account tags: %s', tags)
         create_account_tags(
