@@ -6,7 +6,7 @@ import json
 import logging
 import traceback
 from helper import (
-    create_account_alias, 
+    create_account_alias,
     create_account_tags
 )
 from account_creation_helper import assume_role_arn
