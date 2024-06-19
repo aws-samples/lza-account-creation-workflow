@@ -223,9 +223,9 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - **account-email** **(-e)** (_string_) --
 
-  The email address used for the root user of the newly managed AWS Account. If this argument isn't used, an email address will be generated using the values _rootEmailPrefix_ and _rootEmailDomain_ from the deploy-config.yaml file.
+  The email address used for the root user of the newly managed AWS Account. If this argument isn't used, an email address will be generated using the values rootEmailPrefix and rootEmailDomain from the configs/deploy-config.yaml file.
   
-  Example of the generated email address: rootEmailPrefix+awsAccountName@rootEmailDomain.
+  If an email address isn't provided, an email address is generated using the following format: _rootEmailPrefix+awsAccountName@rootEmailDomain_.
 
 - **region** **(-r)** (_string_) --
 
@@ -237,7 +237,7 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - **bypass-creation** **(-b)** (_string boolean_) --
 
-  Skip adding the account to the accounts-config.yaml and skip running the Landing Zone Accelerator CodePipeline. This argument is typically used for testing the Account Creation Workflow process.
+  This argument will bypass the adding of the account to the accounts-config.yaml and skip running of the of the Landing Zone Accelerator CodePipeline. This argument is typically used for testing the Account Creation Workflow process or to run the rest of the AWS Step Function steps if an error occurs in the Landing Zone Accelerator CodePipeline.
 
 - **tags** **(-t)** (_string_) --
 
