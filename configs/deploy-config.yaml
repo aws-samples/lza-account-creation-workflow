@@ -67,8 +67,8 @@ appInfrastructure:
   ssoLoginUrl: https://d-012345679.awsapps.com/start/
 
   # Used to create root email address for AWS Accounts - << rootEmailPrefix >>+<< account_name >>@<< rootEmailDomain >>
-  rootEmailPrefix: kuskowsk
-  rootEmailDomain: amazon.com
+  rootEmailPrefix: JohnSmith
+  rootEmailDomain: example.com
 
   # Use ApiGateway to start StepFunction
   useApiGateway: True
