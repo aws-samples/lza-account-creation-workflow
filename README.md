@@ -2,9 +2,9 @@
 
 ## Description
 
-This solution enables customers to deploy a new AWS Account using the Landing Zone Accelerator (LZA) solution through a self-service mechanism. It utilizes an AWS Step Function to orchestrate a series of AWS Lambda Functions to add the account information to a Git repository, trigger the LZA CodePipeline, validate the successful creation of all AWS Resources, and send a completion email to the requester.
+This solution enables customers to deploy a new AWS Account using the Landing Zone Accelerator (LZA) through a self-service mechanism. It utilizes an AWS Step Function to orchestrate a series of AWS Lambda Functions to add the account information to an Amazon S3 Bucket, trigger the LZA CodePipeline, validate the successful creation of all AWS Resources, and send a completion email to the requester.
 
-Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active Directory) groups with permission sets during the account request process. This feature can be enabled in the deploy-config.yaml file.
+Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active Directory) groups with AWS IAM Identity Center (formerly known as AWS SSO) permission sets during the account request process. This feature can be enabled in the deploy-config.yaml file.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 | app                                               | Contains the CDK Application Infrastructure Code (e.g., Lambdas, StepFunctions, SES, S3). |
 | app/cdk_helpers           | Directory that holds all definitions used to help deploy and manage the Account Creation solution. |
 | app/lambda_layer                                  | Directory that holds all AWS Lambda Layer source code. This code is referenced in more than one Lambda Function. |
-| app/lambda_layer/account_creation_helper          | AWS Lambda Layer that contains all common code used across the solution, including modules for assuming roles and checking Service Catalog progress. |
+| app/lambda_layer/account_creation_helper          | AWS Lambda Layer that contains all common code for account creation, including modules for assuming roles and checking Service Catalog progress. |
 | app/lambda_layer/boto3          | AWS Lambda Layer for the boto3 library, as AWS Lambda doesn't always package the latest version of Boto3. |
 | app/lambda_layer/identity_center_helper          | AWS Lambda Layer that supports common AWS IAM Identity Center calls.  |
 | app/lambda_src                                    | Directory that holds AWS Lambda Functions source code. |
@@ -35,7 +35,8 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 | app/lambda_src/stepfunction/AttachPermissionSet  | AWS Lambda Function that adds a permissions set to an SSO Group. |
 | app/lambda_src/stepfunction/AzureADGroupSync   | AWS Lambda Function that syncs the desired Microsoft Entra ID Group to AWS IAM Identity Center. |
 | app/lambda_src/stepfunction/CheckForRunningProcesses   | AWS Lambda Function that checks if the Decommissioning CodeBuild project and LZA Pipeline are currently running. If one of those resources is running, it will delay the AWS Step Function. |
-| app/lambda_src/stepfunction/CreateAccount  | AWS Lambda Function that uses LZA to create an AWS Account. |
+| app/lambda_src/stepfunction/CreateAccountCodeCommit  | AWS Lambda Function that uses LZA's CodeCommit repository to create an AWS Account. **Deprecated Version** |
+| app/lambda_src/stepfunction/CreateAccountS3  | AWS Lambda Function that uses LZA's S3 config bucket to create an AWS Account. |
 | app/lambda_src/stepfunction/CreateAdditionalResources  | AWS Lambda Function that creates AWS resources that couldn't be managed by LZA or CloudFormation (e.g., Account Alias, Service Catalog Tags). |
 | app/lambda_src/stepfunction/GetAccountStatus  | AWS Lambda Function that scans the AWS Service Catalog Provisioned Product to determine if the account creation has completed. |
 | app/lambda_src/stepfunction/ReturnResponse  | AWS Lambda Function that returns either an Account Number (if account creation is successful) or an error message (if there is a failure in the creation process).                                                                                                           |
@@ -46,7 +47,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 | configs    | Configuration files used for the solution. |
 | configs/deploy-config.yaml  | Configuration file used for deployment and application infrastructure. |
 | images | Images used in the README document. |
-| pipeline | CDK Deployment Infrastructure Code (e.g., CodePipeline, CodeCommit, CodeBuild). |
+| pipeline | CDK Deployment Infrastructure Code (e.g., CodePipeline, CodeBuild, S3, KMS, IAM). |
 | scripts | Supporting scripts to ensure the solution adheres to best practices.  |
 | tests | Directory where all testing code should reside.  |
 | requirements.txt | Pip requirements file for the deployment environment. |
@@ -69,7 +70,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 
   - [How to get the required data from Microsoft Entra ID](docs/GET_MS_DATA.md)
 
-- (Optional) If you would like to integrate AWS Permissions Sets with a Microsoft Entra ID Group, you will need to create an AWS Secret for GraphAPI.
+- (Optional) If you would like to integrate AWS Permission Sets with a Microsoft Entra ID Group, you will need to create an AWS Secret for GraphAPI.
 
   - Use the values collected from the previous step to set the variables for the AWS CLI command.
 
@@ -159,7 +160,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 
 ### **DISCLAIMER**
 
-This solution will be deployed into your AWS Management Account. The AWS Management Account is a highly sensitive account that should be protected as much as possible using the least privileged permission model. We recommend that customers use a federated role for access, _NOT_ an IAM user. The required permissions are listed below.
+This solution will be deployed into your AWS Management Account. The AWS Management Account is a highly privileged account and should be treated with care. We recommend that customers use a federated role for access, _NOT_ an IAM user, and follow the principle of least privilege.
 
 For this example, S3 Bucket Access Logging is not enabled but it is recommended that you enable it when adding this solution to your enterprise.
 
@@ -175,9 +176,9 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - Update the config/deploy-config.yaml file with the appropriate values. Typical values that will need updating include: accountCreationFailure, accountCompletionFromEmail, ssoLoginUrl, rootEmailPrefix, rootEmailDomain, useGraphApiSync, and enableAzureADIntegration.
 
-  - To use the optional Microsoft Entra ID integration, you will need to set enableAzureADIntegration to true and ensure that the graphApiSecretName value matches the AWS Secret created in the prerequisite step.
+  - To use the optional Microsoft Entra ID integration, set enableAzureADIntegration to true and provide the necessary Microsoft Entra ID configuration details. Ensure that the graphApiSecretName value matches the AWS Secret created in the prerequisite step.
 
-- Ensure that the Docker Engine is running, then run the following CDK commands to deploy the solution's deployment infrastructure. This will set up a CI/CD Pipeline to allow for future enhancements to the solution. It will configure the deployment pipeline and dependent resources (e.g., CodeCommit, CodeBuild, CodePipeline). After the deployment, the Git Repository (CodeCommit) will be populated automatically and trigger the CI/CD Pipeline (CodePipeline). Once the pipeline is complete, the solution will be fully deployed.
+- Ensure that the Docker Engine is running, then run the following CDK commands to deploy the solution's deployment infrastructure. This will set up a CI/CD Pipeline to allow for future enhancements to the solution. It will configure the deployment pipeline and dependent resources (e.g., CodePipeline, CodeBuild, S3, KMS, IAM). 
 
   ```bash
   cdk bootstrap
@@ -185,7 +186,15 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
   cdk deploy
   ```
 
-- _If not deploying into the us-east-1 AWS Region:_ This is needed since AWS Organizations only pushes CloudTrail events to us-east-1. This solution will allow AWS Organizations to push events to other regions using the target event bus.
+- After the successful deployment of CodePipeline, we need to trigger the CI/CD Pipeline (CodePipeline) by creating a zip file of the contents of the source code directory and uploading it to S3. Once the pipeline is complete, the solution will be fully deployed. This can be done using the _upload_to_source_bucket.py_ script located in the _scripts_ directory. 
+
+  ```python
+  python ./scripts/upload_to_source_bucket.py
+  ```
+
+  **NOTE:** This script can also be used to integrate version control systems (e.g. GitHub, GitLab) to trigger the CI/CD Pipeline. 
+
+- _If not deploying into the us-east-1 AWS Region:_ This step is needed because AWS Organizations only pushes CloudTrail events to us-east-1. This solution allows AWS Organizations to push events to other regions using the target event bus.
 
   - Retrieve the Custom LZA Account Creation Workflow EventBus ARN (oLzaAccountCreationWorkflowEventBusArn) from the _lza-account-creation-workflow-application_ CloudFormation Output.
 
@@ -223,7 +232,7 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - **account-email** **(-e)** (_string_) --
 
-  The email address used for the root user of the newly managed AWS Account. If this argument isn't used, an email address will be generated using the values rootEmailPrefix and rootEmailDomain from the configs/deploy-config.yaml file.
+  The email address used for the root user of the newly managed AWS Account. If this argument isn't provided, an email address is generated using two values (_rootEmailPrefix_ and _rootEmailDomain_) from the configs/deploy-config.yaml file.
   
   If an email address isn't provided, an email address is generated using the following format: _rootEmailPrefix+awsAccountName@rootEmailDomain_.
 
@@ -237,7 +246,7 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - **bypass-creation** **(-b)** (_string boolean_) --
 
-  This argument will bypass the adding of the account to the accounts-config.yaml and skip running of the of the Landing Zone Accelerator CodePipeline. This argument is typically used for testing the Account Creation Workflow process or to run the rest of the AWS Step Function steps if an error occurs in the Landing Zone Accelerator CodePipeline.
+  This argument will bypass adding the account to the accounts-config.yaml file and  skip running of the of the Landing Zone Accelerator CodePipeline. This argument is typically used for testing the Account Creation Workflow process or to run the rest of the AWS Step Function steps if an error occurs in the Landing Zone Accelerator CodePipeline.
 
 - **tags** **(-t)** (_string_) --
 
@@ -259,7 +268,7 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
   cd lza-account-creation-workflow
   ```
 
-- Ensure requirements-run.txt has been installed on the machine where you would like to invoke the AWS Step Function.
+- Ensure the dependencies listed in requirements-run.txt have been installed on the machine where you would like to invoke the AWS Step Function.
 
   - To install the requirements, run the following command:
 

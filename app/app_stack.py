@@ -49,15 +49,12 @@ class AccountCreationWorkflowStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Replace SSM Parameters within config file
-        config = replace_ssm_in_config(scope=self, temp_config=config)
+        config = replace_ssm_in_config(scope=self, input_config=config)
 
         # Set varaibles
         account_id = Stack.of(self).account
         region = Stack.of(self).region
         partition = Stack.of(self).partition
-
-        pipeline_stack_name = config['deployInfrastructure']['cloudformation']['stackName']
-        app_stack_name = config['appInfrastructure']['cloudformation']['stackName']
 
         # Integration usage
         azure_ad_intgration = config['appInfrastructure'].get('enableAzureADIntegration', False)
@@ -117,14 +114,6 @@ class AccountCreationWorkflowStack(Stack):
             ],
             resources=["*"]
         ))
-        NagSuppressions.add_resource_suppressions_by_path(
-            self, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLogRetentionRole/DefaultPolicy/Resource",
-            [{
-                "id": 'AwsSolutions-IAM5',
-                "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                    ' with evidence for those permission. Needed * for resource readonly access to logs.'
-            }]
-        )   
 
         # Lambda Event Based
         i_account_tag_ssm_parameter_fn = create_lambda_function(
@@ -148,14 +137,6 @@ class AccountCreationWorkflowStack(Stack):
             ],
             resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
         ))
-        NagSuppressions.add_resource_suppressions_by_path(
-            self, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionAccountTagToSsmParameter/ServiceRole/DefaultPolicy/Resource",
-            [{
-                "id": 'AwsSolutions-IAM5',
-                "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                    ' with evidence for those permission. Needed * for resource readonly access to all accounts.'
-            }]
-        )    
 
         # EventBus is needed incase the originating region is not us-east-1, organizational resources only push 
         #   Cloudtrail events to us-east-1. We have to pass that event to the from us-east-1 to the desired region. 
@@ -186,14 +167,12 @@ class AccountCreationWorkflowStack(Stack):
 
         # Lamdab Functions used by StepFunction
         sfn_lambdas = setup_default_stepfunction_lambdas(
-            scope=self, 
-            config=config, 
+            scope=self,
+            config=config,
             boto3_layer=i_boto3_layer,
             account_creation_layer=i_account_creation_helper_layer,
             retention_role=i_log_retention_role,
-            lambda_key=i_kms_keys['Lambda'], 
-            pipeline_stack_name=pipeline_stack_name,
-            app_stack_name=app_stack_name,
+            lambda_key=i_kms_keys['Lambda'],
             account_creation_failure_sns_arn=i_account_creation_failure_sns.topic_arn,
             account_creation_email_ses_identity=i_account_creation_from_email_ses.email_identity_name
         )
@@ -205,9 +184,7 @@ class AccountCreationWorkflowStack(Stack):
                 config=config,
                 boto3_layer=i_boto3_layer,
                 retention_role=i_log_retention_role,
-                lambda_key=i_kms_keys['Lambda'],
-                pipeline_stack_name=pipeline_stack_name,
-                app_stack_name=app_stack_name
+                lambda_key=i_kms_keys['Lambda']
             )
 
             sfn_lambdas.update(_sfn_azure_lambdas)
@@ -227,9 +204,7 @@ class AccountCreationWorkflowStack(Stack):
                 config=config,
                 boto3_layer=i_boto3_layer,
                 retention_role=i_log_retention_role,
-                lambda_key=i_kms_keys['Lambda'],
-                pipeline_stack_name=pipeline_stack_name,
-                app_stack_name=app_stack_name
+                lambda_key=i_kms_keys['Lambda']
             )
 
         # StepFunction
@@ -246,12 +221,28 @@ class AccountCreationWorkflowStack(Stack):
             resources=list(sfn_lambdas.values())
         ))
 
-        NagSuppressions.add_resource_suppressions_by_path(
-            self, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rStateMachineLZA-CreateAccount/Role/DefaultPolicy/Resource",
+        NagSuppressions.add_stack_suppressions(
+            self,
             [{
+                "id": 'AwsSolutions-IAM4',
+                "reason": 'The IAM user, role, or group uses AWS managed policies.'
+            },
+            {
                 "id": 'AwsSolutions-IAM5',
                 "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
                     ' with evidence for those permission.'
+            },
+            {
+                "id": 'AwsSolutions-L1',
+                "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
+            },
+            {
+                "id": 'AwsSolutions-COG4',
+                "reason": 'The API GW method does not use a Cognito user pool authorizer.'
+            },
+            {
+                "id": 'AwsSolutions-APIG2',
+                "reason": 'Validation has been created for POST Method.'
             }]
         )
 
@@ -261,15 +252,3 @@ class AccountCreationWorkflowStack(Stack):
             Tags.of(self).add(key, value)
 
         Aspects.of(self).add(AwsSolutionsChecks())
-
-        NagSuppressions.add_stack_suppressions(
-            self,
-            [{
-                "id": 'AwsSolutions-IAM4',
-                "reason": 'The IAM user, role, or group uses AWS managed policies.'
-            },
-            {
-                "id": 'AwsSolutions-L1',
-                "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
-            }]
-        )

@@ -21,13 +21,15 @@ deployInfrastructure:
 
   codepipeline:
     pipelineName: lza-account-creation-workflow
+    sourceBucketPrefix: lza-account-creation-workflow-src  # Region and Account number will be appended to the bucket name
 
-  codecommit:
-    repositoryName: lza-account-creation-workflow
-    ignoreFilesDirectoriesCodeCommit: # Ignore specific files and directories during CodeCommit creation
+  sourceCode:
+    ignoreFilesDirectories: # Ignore specific files and directories during zip creation
       - .python-version # This file caused the cdk synth to fail in the pipeline
 
 appInfrastructure:
+  constructPrefix: LzaAccCreateWorkflow
+  
   cloudformation:
     stackName: lza-account-creation-workflow-application
 
@@ -48,6 +50,7 @@ appInfrastructure:
   
   # LZA Level Variables 
   lzaPipelineName: AWSAccelerator-Pipeline
+  lzaPipelineSource: S3   # Options: S3 | CodeCommit | Github (WIP)
   lzaRepositoryName: aws-accelerator-config
   
   # Decommissioning Solution Varaibles
@@ -64,8 +67,8 @@ appInfrastructure:
   ssoLoginUrl: https://d-012345679.awsapps.com/start/
 
   # Used to create root email address for AWS Accounts - << rootEmailPrefix >>+<< account_name >>@<< rootEmailDomain >>
-  rootEmailPrefix: JohnSmith
-  rootEmailDomain: example.com
+  rootEmailPrefix: kuskowsk
+  rootEmailDomain: amazon.com
 
   # Use ApiGateway to start StepFunction
   useApiGateway: True
