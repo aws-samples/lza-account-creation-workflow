@@ -15,15 +15,24 @@ STS_CLIENT = boto3.client("sts")
 
 
 def generate_sf_exec_name(account_name: str, statemachine_arn: str, client: boto3.client) -> str:
-    """ Generates a Step Function execution name, based on the number of previous execution
+    """
+    Generates a unique Step Function execution name based on the account name and previous executions.
+
+    This function creates a unique name for a Step Function execution by appending a number to the
+    account name if there have been previous executions with the same account name. It queries the
+    Step Function's execution history to determine the appropriate suffix.
 
     Args:
-        account_name (str): The name in which the requester would like the account
-        client (boto3.client): boto3 client for Step Function
-        dry_run (bool): Is this execution a dry run?
+        account_name (str): The desired name for the AWS account. This will be used as the base for
+                            the execution name.
+        statemachine_arn (str): The Amazon Resource Name (ARN) of the Step Function state machine.
+        client (boto3.client): A boto3 client for AWS Step Functions.
 
     Returns:
-        str: Returns generated Step Function execution name
+        str: A unique execution name for the Step Function. If this is the first execution for the
+             given account name, it will be the account name itself. Otherwise, it will be in the
+             format "{account_name}-{nn}", where nn is a zero-padded two-digit number representing
+             the execution count.
     """
     # Get number of executions with that account name in execution name
     count = 0
@@ -45,19 +54,36 @@ def generate_sf_exec_name(account_name: str, statemachine_arn: str, client: boto
 
 def lambda_handler(event, context):
     """
-    Handles Lambda function requests and returns responses.
+    Handles Lambda function requests to initiate a Step Function execution for account creation.
+
+    This function processes incoming requests, either from API Gateway or directly (e.g., from Terraform),
+    extracts necessary parameters, and starts a Step Function execution for creating an AWS account.
+    It handles required parameters such as account name, support distribution list, and managed 
+    organizational unit, as well as optional parameters like Active Directory integration.
 
     Args:
-        event (dict): The event passed by Lambda
-        context (object): Lambda Context runtime methods and attributes
+        event (dict): The event passed by Lambda. It can be in two formats:
+            - API Gateway format: Contains a 'body' key with a JSON string of parameters.
+            - Direct invocation format: The event itself is a dictionary of parameters.
+        context (object): Lambda Context runtime methods and attributes. This object provides
+            information about the current execution environment.
 
     Returns:
-        dict: The API response including statusCode and body
+        dict: The API response including:
+            - statusCode (int): HTTP status code (200 for success, 400 for bad request, 500 for server error)
+            - body (str): A JSON string containing:
+                - message (str): A description of the result
+                - data (dict): Additional data about the Step Function execution, including:
+                    - executionArn (str): The ARN of the started Step Function execution
+                    - startDate (str): The start date and time of the execution
+
+    Raises:
+        Exception: If there's an error during execution, it's caught and returned as a 500 response.
     """
     LOGGER.info(json.dumps(event))
     response = 404
 
-    # Used by API Gateway 
+    # Used by API Gateway
     if event.get('body'):
         params = json.loads(event['body'])
 
@@ -66,7 +92,7 @@ def lambda_handler(event, context):
         params = event
 
     try:
-        # REQUIRED 
+        # REQUIRED
         account_name = params['account_name']
         support_dl = params['support_dl']
         managed_org_unit = params['managed_org_unit']

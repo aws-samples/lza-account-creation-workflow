@@ -41,11 +41,14 @@ class EmailData:
             self.bcc_list = []
 
     def generate_email_html(self) -> Tuple[str, str]:
-        """Setup email html and text based on passed in input object
+        """Generates HTML and plain text content for an email.
 
-        Args:
-            email_data (EmailData): The object containing data that should be replaced in the text_
-        Returns: tuple(str, str): A tuple containing the resulting html string and plain text string
+        Returns:
+            Tuple[str, str]: A tuple containing the resulting HTML string and plain text string.
+
+        This method uses the data stored in the EmailData object to generate
+        both HTML and plain text versions of an email. It replaces placeholders
+        in template files with actual data, creating customized email content.
         """
         html = f"""
 <!DOCTYPE  html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional/EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -111,14 +114,19 @@ Account ID: {self.account_id}\nAccount Name: {self.account_name}\nSSO Login URL:
 
 
 def lambda_handler(event, context):
-    """Lambda handler for sending account creation emails via SES
+    """Lambda handler for sending account creation emails via SES.
 
     Args:
-        event (dict): Triggering event
-        context (dict): Triggering source info
+        event (dict): The event dict containing the trigger information and payload.
+        context (object): Lambda context runtime methods and attributes.
 
     Returns:
-        None
+        dict: Updated payload including the email sending status.
+
+    This function processes the incoming event, extracts necessary information
+    to create an EmailData object, sends an email using SES, and updates the
+    payload with the email sending status. If an error occurs during execution,
+    it logs the error and raises a TypeError.
     """
     print(json.dumps(event))
     try:

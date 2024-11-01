@@ -1,4 +1,4 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-boto3>=1.35.51
+from .git_helper import GHGit, GHCodeCommit

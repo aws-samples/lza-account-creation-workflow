@@ -18,15 +18,22 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """This function will get the AWS Service Catalog / Control Tower Account Deployment status.
+    """Retrieves the AWS Service Catalog / Control Tower Account Deployment status.
 
     Args:
-        event (dict): Event information passed in by the AWS Step Functions
-        context (object): Lambda Function context information
+        event (dict): Event information passed in by the AWS Step Functions.
+        context (object): Lambda Function context information.
 
     Returns:
         dict: Payload with additional values for Account Status. This will be passed to the next step in the
         Step Function.
+
+    This function checks the deployment status of AWS accounts created through
+    Service Catalog or Control Tower. It processes the input event, performs
+    necessary validations, and returns an updated payload containing the
+    account status information. This information is crucial for subsequent
+    steps in the Step Function workflow to make decisions based on the
+    account's current state.
     """
     print(json.dumps(event))
     status = []

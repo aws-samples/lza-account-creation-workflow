@@ -5,68 +5,110 @@ import json
 import os
 import aws_cdk as cdk
 from constructs import Construct
-import cdk_nag
 from aws_cdk import (
     Stack,
     RemovalPolicy,
+    Tags,
+    Aspects,
     pipelines,
-    aws_codecommit as codecommit,
     aws_iam as iam,
-    aws_s3 as s3
+    aws_s3 as s3,
+    aws_codepipeline_actions as codepipeline_actions
 )
+from cdk_nag import NagSuppressions, AwsSolutionsChecks
 from pipeline.pipeline_app_stage import PipelineAppStage
-from pipeline.pipeline_helper import create_archive
-from pipeline.cdk_nag_suppression import pipeline_nag_suppression
 
 
 class PipelineStack(cdk.Stack):
+    """
+    CDK Stack for the deployment pipeline.
 
-    def __init__(self, scope: Construct, construct_id: str, config: dict, **kwargs) -> None:
+    This stack sets up the CodePipeline for building and deploying the application.
+    It includes the source, build, and deployment stages, along with necessary resources
+    such as S3 buckets and IAM roles.
+    """
+
+    def create_pipeline_source_bucket(self, config: dict):
         """
-        Initialize a new instance of the stack.
+        Creates an S3 bucket for uploading the source code archive.
 
         Args:
-            scope (Construct): The scope in which to define this construct's resources.
-            construct_id (str): Uniquely identifies this construct within its scope. 
-            config (dict): Configuration dictionary.
-            **kwargs: Additional arguments passed to the construct base class.
+            config (dict): The application configuration.
         """
-        super().__init__(scope, construct_id, **kwargs)
-
         # Get current stack name
         stack = Stack.of(self)
         region = stack.region
         account = stack.account
+
+        # Create CodePipeline Source Bucket
+        src_bucket_name = f"{config['deployInfrastructure']['codepipeline']['sourceBucketPrefix']}-{region}-{account}"
+        self.source_bucket = s3.Bucket(
+            self,
+            self.construct_prefix+"SourceS3Bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            bucket_name=src_bucket_name,
+            enforce_ssl=True,
+            versioned=True
+        )
+
+        NagSuppressions.add_resource_suppressions(
+            self.source_bucket,
+            [
+                {
+                    "id": "AwsSolutions-S1",
+                    "reason": "The S3 Bucket has server access logs disabled."
+                }
+            ]
+        )
+
+    def create_pipeline(self, config: dict):
+        """
+        Creates the CodePipeline for building and deploying the application.
+
+        Args:
+            config (dict): The application configuration.
+            
+        The pipeline includes the source, build, and deployment stages, along with 
+        necessary resources such as S3 buckets and IAM roles.
+        """
+        # Get current stack name
+        stack = Stack.of(self)
+        region = stack.region
+        account = stack.account
+
         pipeline_name = config['deployInfrastructure']['codepipeline']['pipelineName']
 
         # Create an S3 bucket CodePipeline Artifacts
         self.pipeline_bucket = s3.Bucket(
-            self, "rCodePipelineS3Bucket",
+            self,
+            self.construct_prefix+"PipelineS3Bucket",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             bucket_name=f"{pipeline_name}-{region}-{account}",
             enforce_ssl=True
         )
 
-        # Create a zip file to all CodeCommit to import
-        archive_file = create_archive(
-            ignored_files_directories=config.get("deployInfrastructure", {}).get("codecommit", {}).get('ignoredFilesDirectories', [])
+        NagSuppressions.add_resource_suppressions(
+            self.pipeline_bucket,
+            [
+                {
+                    "id": "AwsSolutions-S1",
+                    "reason": "The S3 Bucket has server access logs disabled."
+                }
+            ]
         )
 
-        # Create CodeCommit repository with solution contents
-        repository = codecommit.Repository(
-            self, "rCodeCommitRepository",
-            repository_name=config['deployInfrastructure']['codecommit']['repositoryName'],
-            code=codecommit.Code.from_zip_file(
-                file_path=archive_file,
-                branch='main'
-            )
+        # Create a Pipeline
+        source = pipelines.CodePipelineSource.s3(
+            bucket=self.source_bucket,
+            object_key="zipped/source.zip",
+            action_name="Source",
+            trigger=codepipeline_actions.S3Trigger.EVENTS
         )
-
-        source = pipelines.CodePipelineSource.code_commit(repository, "main")
-
         pipeline = pipelines.CodePipeline(
-            self, "rCodePipeline",
+            self,
+            self.construct_prefix+"CodePipeline",
             pipeline_name=pipeline_name,
             docker_enabled_for_self_mutation=True,
             docker_enabled_for_synth=True,
@@ -106,13 +148,61 @@ class PipelineStack(cdk.Stack):
             )
         )
 
-        # Add tags to all resources created
-        tags = json.loads(json.dumps(config['tags']))
-        for key, value in tags.items():
-            cdk.Tags.of(self).add(key, value)
-
-        # Force CDK to build pipeline beforing running CFN NAG
+        # Builds CodePipeline to allow for Suppression
         pipeline.build_pipeline()
 
-        cdk.Aspects.of(self).add(cdk_nag.AwsSolutionsChecks())
-        pipeline_nag_suppression(scope=self, stack_name=cdk.Stack.of(self).stack_name)
+        # Cleanup CodePipeline Artifact Bucket during Cfn Stack Deletion
+        pipeline_bucket = pipeline.pipeline.artifact_bucket
+        pipeline_bucket.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        NagSuppressions.add_resource_suppressions(
+            pipeline,
+            [
+                {
+                    "id": "AwsSolutions-S1",
+                    "reason": "The S3 Bucket has server access logs disabled."
+                },
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "The IAM entity contains wildcard permissions and does not " \
+                        "have a cdk-nag rule suppression with evidence for those permission."
+                },
+                {
+                    "id": "AwsSolutions-CB3",
+                    "reason": "The CodeBuild project has privileged mode enabled."
+                },
+                {
+                    "id": "AwsSolutions-CB4",
+                    "reason": "The CodeBuild project does not use an AWS KMS key for encryption."
+                }
+            ],
+            apply_to_children=True
+        )
+
+    def __init__(self, scope: Construct, construct_id: str, config: dict, **kwargs) -> None:
+        """
+        Initialize the PipelineStack.
+
+        Args:
+            scope (Construct): The parent of this stack, usually an App or a Stage, but could be
+                any construct.
+            construct_id (str): The identifier of this stack. Must be unique within this scope.
+            config (dict): Application configuration.
+            **kwargs: Other parameters passed to the base class.
+        """
+        super().__init__(scope, construct_id, **kwargs)
+
+        self.construct_prefix = config['appInfrastructure'].get('constructPrefix')
+
+        # Create Source S3 Bucket
+        self.create_pipeline_source_bucket(config=config)
+
+        # CodePipeline Setup
+        self.create_pipeline(config=config)
+
+        # Add tags to all resources created
+        tags = json.loads(json.dumps(config["tags"]))
+        for key, value in tags.items():
+            Tags.of(self).add(key, value)
+
+        Aspects.of(self).add(AwsSolutionsChecks())

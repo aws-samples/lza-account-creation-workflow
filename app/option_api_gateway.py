@@ -12,12 +12,11 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_logs as logs
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_function
 
 
 def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, retention_role: iam.IRole,
-                      lambda_key: kms.IKey, pipeline_stack_name: str, app_stack_name: str):
+                      lambda_key: kms.IKey):
     """
     Set up API Gateway for the account creation workflow.
 
@@ -27,8 +26,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         boto3_layer (ILayerVersion): The Lambda layer for AWS SDK.
         retention_role (IRole): The role for Lambda function logs retention.
         lambda_key (IKey): The KMS key for encrypting Lambda function code.
-        pipeline_stack_name (str): The name of the pipeline stack.
-        app_stack_name (str): The name of the app stack.
     
     Returns:
         None
@@ -56,80 +53,56 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
     # Get the API Gateway account information
     account_info = api_gateway.get_account()
 
+    # API Gateway Configurations
+    api_deploy_options=apigw.StageOptions(
+        access_log_destination=apigw.LogGroupLogDestination(log_group),
+        access_log_format=apigw.AccessLogFormat.clf(),
+        logging_level=apigw.MethodLoggingLevel.INFO,
+        data_trace_enabled=True
+    )
+
+    api_endpoint_configuration=apigw.EndpointConfiguration(
+        types=[apigw.EndpointType.EDGE]
+    )
+ 
+    api_iam_policy = iam.PolicyDocument(
+        statements=[
+            iam.PolicyStatement(
+                actions=["execute-api:Invoke"],
+                effect=iam.Effect.ALLOW,
+                principals=[iam.AccountRootPrincipal()],
+                resources=[
+                    f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/GET/check_name",
+                    f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/POST/execute",
+                    f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/GET/get_execution_status"
+                ]
+            )
+        ]
+    )
+
     # Check if the CloudWatch log role ARN is specified, if not create API Gateway role
     #  and associate it to the API Gateway
-    api_gateway_cwl = config['appInfrastructure'].get('apiGatewayCloudWatchLogs', True)
-    if 'cloudwatchRoleArn' not in account_info and api_gateway_cwl:
-        api_gateway_role = iam.Role(
-            scope, "rApiGatewayCreateAccountCloudWatchRole",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal("lambda.amazonaws.com"),
-                iam.ServicePrincipal("apigateway.amazonaws.com")
-            )
+    if 'cloudwatchRoleArn' not in account_info:
+        api = apigw.RestApi(
+            scope, "rApiGatewayCreateAccount",
+            rest_api_name=config['appInfrastructure']['apiGatewayName'],
+            description="RestAPI to intiate and check status of the Account Creation Workflow.",
+            cloud_watch_role=True,
+            deploy_options=api_deploy_options,
+            endpoint_configuration=api_endpoint_configuration,
+            policy=api_iam_policy
         )
-        api_gateway_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-            )
+    else:
+        api = apigw.RestApi(
+            scope, "rApiGatewayCreateAccount",
+            rest_api_name=config['appInfrastructure']['apiGatewayName'],
+            description="RestAPI to intiate and check status of the Account Creation Workflow.",
+            deploy_options=api_deploy_options,
+            endpoint_configuration=api_endpoint_configuration,
+            policy=api_iam_policy
         )
-
-        apigw.CfnAccount(
-            scope, "rApiGatewayCreateAccountCloudWatchRoleAttach",
-            cloud_watch_role_arn=api_gateway_role.role_arn
-        )
-
-    # Create API Gateway
-    api = apigw.RestApi(
-        scope, "rApiGatewayCreateAccount",
-        rest_api_name=config['appInfrastructure']['apiGatewayName'],
-        description="RestAPI to intiate and check status of the Account Creation Workflow.",
-        # cloud_watch_role=True,
-        # cloud_watch_role_removal_policy=RemovalPolicy.DESTROY,
-        deploy_options=apigw.StageOptions(
-            access_log_destination=apigw.LogGroupLogDestination(log_group),
-            access_log_format=apigw.AccessLogFormat.clf(),
-            logging_level=apigw.MethodLoggingLevel.INFO,
-            data_trace_enabled=True
-        ),
-        endpoint_configuration=apigw.EndpointConfiguration(
-            types=[apigw.EndpointType.EDGE]
-        ),
-        policy=iam.PolicyDocument(
-            statements=[
-                iam.PolicyStatement(
-                    actions=["execute-api:Invoke"],
-                    effect=iam.Effect.ALLOW,
-                    principals=[iam.AccountRootPrincipal()],
-                    resources=[
-                        f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/GET/check_name",
-                        f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/POST/execute",
-                        f"arn:{partition}:execute-api:{region}:{account_id}:*/prod/GET/get_execution_status"
-                    ]
-                )
-            ]
-        )
-    )
 
     CfnOutput(scope, "oApiGatewayCreateAccountEndpoint", value=api.url)
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rApiGatewayCreateAccount/Resource",
-        [
-            {
-                "id": 'AwsSolutions-APIG2',
-                "reason": 'Validation has been created for POST Method.'
-            }
-        ]
-        # apply_to_children=True
-    ) 
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rApiGatewayCreateAccount/DeploymentStage.prod/Resource",
-        [{
-            "id": 'AwsSolutions-APIG3',
-            "reason": 'The REST API stage is not associated with AWS WAFv2 web ACL.'
-        }]
-    )
 
     # Check Name Availability
     i_name_available = create_lambda_function(
@@ -155,29 +128,12 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         resources=["*"]
     ))
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionNameAvailability/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. List permissions typically needs to have a * in resources.'
-        }]
-    )
-
     api_check_name = api.root.add_resource("check_name")
     api_check_name.add_method(
         http_method="GET",
         integration=apigw.LambdaIntegration(i_name_available),
         method_responses=[{"statusCode": "200"}],
         authorization_type=apigw.AuthorizationType.IAM
-    )
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rApiGatewayCreateAccount/Default/check_name/GET/Resource",
-        [{
-            "id": 'AwsSolutions-COG4',
-            "reason": 'The API GW method does not use a Cognito user pool authorizer.'
-        }]
     )
 
     # Run StepFunction
@@ -205,7 +161,7 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         ],
         resources=[f"arn:{partition}:states:{region}:{account_id}:stateMachine:{config['appInfrastructure']['stepFunctionName']}"]
     ))
-    
+ 
     api_model = api.add_model(
         "rApiGatewayModel",
         content_type="application/json",
@@ -247,14 +203,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         authorization_type=apigw.AuthorizationType.IAM
     )
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rApiGatewayCreateAccount/Default/execute/POST/Resource",
-        [{
-            "id": 'AwsSolutions-COG4',
-            "reason": 'The API GW method does not use a Cognito user pool authorizer.'
-        }]
-    )
-    
     # Get Create Account Status
     i_get_exec_status = create_lambda_function(
         scope=scope,
@@ -285,29 +233,12 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         ]
     ))
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionGetExecutionStatus/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. Added temporarily to identify resource arns.'
-        }]
-    )
-
     execute = api.root.add_resource("get_execution_status")
     execute.add_method(
         http_method="GET",
         integration=apigw.LambdaIntegration(i_get_exec_status),
         method_responses=[{"statusCode": "200"}],
         authorization_type=apigw.AuthorizationType.IAM
-    )
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rApiGatewayCreateAccount/Default/get_execution_status/GET/Resource",
-        [{
-            "id": 'AwsSolutions-COG4',
-            "reason": 'The API GW method does not use a Cognito user pool authorizer.'
-        }]
     )
 
     # If you would like to deploy a user with credentials to access API Gateway, add a user name to the config file

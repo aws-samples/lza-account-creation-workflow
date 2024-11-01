@@ -7,14 +7,13 @@ from aws_cdk import (
     aws_lambda as lambda_,
     aws_kms as kms
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_function, create_lambda_docker_function
 
 
-def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_.ILayerVersion, 
-                                       account_creation_layer: lambda_.ILayerVersion, retention_role: iam.IRole, 
-                                       lambda_key: kms.IKey, pipeline_stack_name: str, app_stack_name: str, 
-                                       account_creation_failure_sns_arn, account_creation_email_ses_identity):
+def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
+                                       account_creation_layer: lambda_.ILayerVersion, retention_role: iam.IRole,
+                                       lambda_key: kms.IKey, account_creation_failure_sns_arn,
+                                       account_creation_email_ses_identity):
     """
     Sets up default Lambda functions for a Step Functions workflow.
 
@@ -29,8 +28,6 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         account_creation_layer: Helper layer
         retention_role: Log retention role
         lambda_key: KMS key
-        pipeline_stack_name: Pipeline stack name
-        app_stack_name: App stack name
 
     Returns:  
         dict: Map of function names to ARNs
@@ -78,58 +75,113 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     _sfn_lambdas.update({"CheckForRunningProcessesFunctionArn": i_check_for_running_proc_fn.function_arn})
 
     # CREATE ACCOUNT
-    i_create_account_fn = create_lambda_docker_function(
-        scope=scope,
-        function_name='CreateAccount',
-        function_path='stepfunction',
-        description='This function will update the LZA account-config.yaml which will create an AWS Service ' \
-            'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
-        timeout=900,
-        retention_role=retention_role,
-        key=lambda_key,
-        env_vars={
-            "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
-            "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
-            "LZA_CONFIG_REPO_NAME": config['appInfrastructure']['lzaRepositoryName'],
-            "ROOT_EMAIL_PREFIX": config['appInfrastructure']['rootEmailPrefix'],
-            "ROOT_EMAIL_DOMAIN": config['appInfrastructure']['rootEmailDomain']
-        }
-    )
-    i_create_account_fn.add_to_role_policy(
-        statement=iam.PolicyStatement(
-        actions=[
-            "codecommit:GitPull",
-            "codecommit:GitPush",
-            "codecommit:GetBranch",
-            "codecommit:ListBranches",
-            "codecommit:ListPullRequests",
-            "codecommit:ListTagsForResource",
-            "codecommit:ListRepositories",
-            "codecommit:CreateBranch",
-            "codecommit:MergeBranchesByFastForward",
-            "codecommit:MergeBranchesBySquash",
-            "codecommit:MergeBranchesByThreeWay",
-            "codecommit:GetMergeCommit",
-            "codecommit:GetMergeConflicts",
-            "codecommit:GetMergeOptions",
-            "codecommit:BatchDescribeMergeConflicts",
-            "codecommit:DescribeMergeConflicts",
-            "codecommit:DescribePullRequestEvents",
-            "codecommit:CreatePullRequest",
-            "codecommit:CreateCommit",
-            "codecommit:GetCommit",
-            "codecommit:BatchGetCommits",
-            "codecommit:GetDifferences",
-            "codecommit:GetReferences",
-            "codecommit:GetTree",
-            "codecommit:GetRepository",
-            "codecommit:TagResource",
-            "codecommit:UntagResource",
-            "codecommit:UploadArchive",
-            "codecommit:GetUploadArchiveStatus"
-        ],
-        resources=[f"arn:{partition}:codecommit:{region}:{account_id}:{config['appInfrastructure']['lzaRepositoryName']}"]
-    ))
+    lza_pipeline_source = config['appInfrastructure'].get('lzaPipelineSource', 'S3')
+    if lza_pipeline_source == 'S3':
+        i_create_account_fn = create_lambda_function(
+            scope=scope,
+            function_name='CreateAccountS3',
+            function_path='stepfunction',
+            description='This function will update the LZA account-config.yaml which will create an AWS Service ' \
+                'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
+            timeout=900,
+            retention_role=retention_role,
+            key=lambda_key,
+            env_vars={
+                "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
+                "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
+                "LZA_CONFIG_REPO_NAME": config['appInfrastructure']['lzaRepositoryName'],
+                "ROOT_EMAIL_PREFIX": config['appInfrastructure']['rootEmailPrefix'],
+                "ROOT_EMAIL_DOMAIN": config['appInfrastructure']['rootEmailDomain']
+            }
+        )
+        i_create_account_fn.add_to_role_policy(
+            statement=iam.PolicyStatement(
+            actions=[
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+            ],
+            resources=["*"]
+        ))
+
+    # Work In Progress
+    elif lza_pipeline_source == 'GitHub':
+        i_create_account_fn = create_lambda_function(
+            scope=scope,
+            function_name='CreateAccountGitHub',
+            function_path='stepfunction',
+            description='This function will update the LZA account-config.yaml which will create an AWS Service ' \
+                'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
+            timeout=900,
+            retention_role=retention_role,
+            key=lambda_key,
+            env_vars={
+                "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
+                "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
+                "LZA_CONFIG_REPO_NAME": config['appInfrastructure']['lzaRepositoryName'],
+                "ROOT_EMAIL_PREFIX": config['appInfrastructure']['rootEmailPrefix'],
+                "ROOT_EMAIL_DOMAIN": config['appInfrastructure']['rootEmailDomain']
+            }
+        )
+
+    # Archived
+    elif lza_pipeline_source == 'CodeCommit':
+        i_create_account_fn = create_lambda_docker_function(
+            scope=scope,
+            function_name='CreateAccountCodeCommit',
+            function_path='stepfunction',
+            description='This function will update the LZA account-config.yaml which will create an AWS Service ' \
+                'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
+            timeout=900,
+            retention_role=retention_role,
+            key=lambda_key,
+            env_vars={
+                "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
+                "SC_CT_PRODUCT_NAME": "AWS Control Tower Account Factory",
+                "LZA_CONFIG_REPO_NAME": config['appInfrastructure']['lzaRepositoryName'],
+                "ROOT_EMAIL_PREFIX": config['appInfrastructure']['rootEmailPrefix'],
+                "ROOT_EMAIL_DOMAIN": config['appInfrastructure']['rootEmailDomain']
+            }
+        )
+        i_create_account_fn.add_to_role_policy(
+            statement=iam.PolicyStatement(
+            actions=[
+                "codecommit:GitPull",
+                "codecommit:GitPush",
+                "codecommit:GetBranch",
+                "codecommit:ListBranches",
+                "codecommit:ListPullRequests",
+                "codecommit:ListTagsForResource",
+                "codecommit:ListRepositories",
+                "codecommit:CreateBranch",
+                "codecommit:MergeBranchesByFastForward",
+                "codecommit:MergeBranchesBySquash",
+                "codecommit:MergeBranchesByThreeWay",
+                "codecommit:GetMergeCommit",
+                "codecommit:GetMergeConflicts",
+                "codecommit:GetMergeOptions",
+                "codecommit:BatchDescribeMergeConflicts",
+                "codecommit:DescribeMergeConflicts",
+                "codecommit:DescribePullRequestEvents",
+                "codecommit:CreatePullRequest",
+                "codecommit:CreateCommit",
+                "codecommit:GetCommit",
+                "codecommit:BatchGetCommits",
+                "codecommit:GetDifferences",
+                "codecommit:GetReferences",
+                "codecommit:GetTree",
+                "codecommit:GetRepository",
+                "codecommit:TagResource",
+                "codecommit:UntagResource",
+                "codecommit:UploadArchive",
+                "codecommit:GetUploadArchiveStatus"
+            ],
+            resources=[f"arn:{partition}:codecommit:{region}:{account_id}:{config['appInfrastructure']['lzaRepositoryName']}"]
+        ))
+
     i_create_account_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
         actions=[
@@ -194,14 +246,14 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     ))
     _sfn_lambdas.update({"GetAccountStatusFunctionArn": i_get_account_status_fn.function_arn})
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionGetAccountStatus/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. Added temporarily to identify resource arns.'
-        }]
-    )
+    # NagSuppressions.add_resource_suppressions_by_path(
+    #     scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionGetAccountStatus/ServiceRole/DefaultPolicy/Resource",
+    #     [{
+    #         "id": 'AwsSolutions-IAM5',
+    #         "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
+    #             ' with evidence for those permission. Added temporarily to identify resource arns.'
+    #     }]
+    # )
 
     # CREATE ADDITIONAL RESOURCES
     i_create_additional_resources_fn = create_lambda_function(
@@ -240,14 +292,14 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     ))
     _sfn_lambdas.update({"CreateAdditionalResourcesFunctionArn": i_create_additional_resources_fn.function_arn})
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionCreateAdditionalResources/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. Added temporarily to identify resource arns.'
-        }]
-    )   
+    # NagSuppressions.add_resource_suppressions_by_path(
+    #     scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionCreateAdditionalResources/ServiceRole/DefaultPolicy/Resource",
+    #     [{
+    #         "id": 'AwsSolutions-IAM5',
+    #         "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
+    #             ' with evidence for those permission. Added temporarily to identify resource arns.'
+    #     }]
+    # )   
 
     # VALIDATE RESOURCES
     i_validate_resources_fn = create_lambda_function(
@@ -295,15 +347,6 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     ))
     _sfn_lambdas.update({"ValidateResourcesFunctionArn": i_validate_resources_fn.function_arn})
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionValidateResources/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. Added temporarily to identify resource arns.'
-        }]
-    )
-
     # RETURN RESPONSE
     i_return_response_fn = create_lambda_function(
         scope=scope,
@@ -335,15 +378,6 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         resources=["*"]
     ))        
     _sfn_lambdas.update({"ReturnResponseFunctionArn": i_return_response_fn.function_arn})
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionReturnResponse/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. Added temporarily to identify resource arns.'
-        }]
-    )
 
     i_send_email_ses_fn = create_lambda_function(
         scope=scope,

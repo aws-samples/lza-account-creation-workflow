@@ -7,12 +7,11 @@ from aws_cdk import (
     aws_kms as kms,
     aws_lambda as lambda_
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_layer, create_lambda_function
 
 
 def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerVersion, retention_role: iam.IRole, 
-                      lambda_key: kms.IKey, pipeline_stack_name: str, app_stack_name: str) -> dict:
+                      lambda_key: kms.IKey) -> dict:
     """
     Sets up Lambda functions for Azure AD integration.
 
@@ -25,8 +24,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
         boto3_layer: Boto3 layer
         retention_role: Log retention role 
         lambda_key: KMS key
-        pipeline_stack_name: Pipeline stack name
-        app_stack_name: App stack name
 
     Returns:  
         dict: Map of function names to ARNs
@@ -78,15 +75,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
         ))
         _sfn_lambdas.update({"AzureADGroupSyncFunctionArn": i_sync_ad_group_fn.function_arn})
 
-        NagSuppressions.add_resource_suppressions_by_path(
-            scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionAzureADGroupSync/ServiceRole/DefaultPolicy/Resource",
-            [{
-                "id": 'AwsSolutions-IAM5',
-                "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                    ' with evidence for those permission. List permissions typically needs to have a * in resources.'
-            }]
-        )
-
     # VALIDATE AD GROUP SYNC TO SSO
     i_valid_ad_group_sync_fn = create_lambda_function(
         scope=scope,
@@ -114,15 +102,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
     ))
     _sfn_lambdas.update({"ValidateADGroupSyncToSSOFunctionArn": i_valid_ad_group_sync_fn.function_arn})
 
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionValidateADGroupSyncToSSO/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. List permissions typically needs to have a * in resources.'
-        }]
-    )
-    
     # ATTACH PERMISSION SET
     i_attach_permission_set_fn = create_lambda_function(
         scope=scope,
@@ -152,14 +131,5 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
         resources=["*"]
     ))
     _sfn_lambdas.update({"AttachPermissionSetFunctionArn": i_attach_permission_set_fn.function_arn})
-
-    NagSuppressions.add_resource_suppressions_by_path(
-        scope, f"/{pipeline_stack_name}/Deploy-Application/{app_stack_name}/rLambdaFunctionAttachPermissionSet/ServiceRole/DefaultPolicy/Resource",
-        [{
-            "id": 'AwsSolutions-IAM5',
-            "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                ' with evidence for those permission. List permissions typically needs to have a * in resources.'
-        }]
-    )
 
     return _sfn_lambdas

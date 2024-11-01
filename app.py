@@ -10,8 +10,8 @@ from pipeline.pipeline_stack import PipelineStack
 
 
 # Get data from config file and convert to dict
-config_file_path = "./configs/deploy-config.yaml"
-with open(config_file_path, 'r', encoding="utf-8") as f:
+CONFIG_FILE_PATH = "./configs/deploy-config.yaml"
+with open(CONFIG_FILE_PATH, 'r', encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.SafeLoader)
 
 app = cdk.App()
