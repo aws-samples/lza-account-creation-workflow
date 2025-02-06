@@ -1,38 +1,36 @@
-# (c) 2024 Amazon Web Services, Inc. or its affiliates. All Rights Reserved.
-# This AWS Content is provided subject to the terms of the AWS Customer Agreement
-# available at http://aws.amazon.com/agreement or other written agreement between
-# Customer and Amazon Web Services, Inc.
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
 
 from aws_cdk import SecretValue, aws_ssm as ssm
 
 
-def get_secret_value(secrets_name: str):
+def get_secret_value(secrets_name: str) -> str:
     """Retrieves the value of a secret from AWS Secrets Manager.
 
     Args:
         secrets_name (str): The name of the secret. Can be the secret ID
-            or a JSON field in the format "secret_id.json_field".
+            or a JSON field in the format "secret_id.json_field"
 
     Returns:
         str: The value of the secret.
 
-    This function retrieves secrets stored in AWS Secrets Manager. It handles
-    both cases where secrets_name is just the secret ID, and where it contains
-    the secret ID and JSON field separated by a period. The secret value is
-    returned after retrieving it from Secrets Manager. If the secrets_name
-    contains a period, it is split into secret ID and JSON field before retrieval.
+    Raises:
+        ValueError: If secrets_name is empty or None
     """
-    if len(secrets_name.split(".")) == 1:
-        _value = SecretValue.secrets_manager(secret_id=secrets_name).to_string()
+    if not secrets_name:
+        raise ValueError("secrets_name cannot be empty or None")
 
-    if len(secrets_name.split(".")) > 1:
-        _secrets_id = secrets_name.split(".")[0]
-        _secret_json = secrets_name.split(".")[1]
-        _value = SecretValue.secrets_manager(
-            secret_id=_secrets_id, json_field=_secret_json
-        ).to_string()
+    # Split the secrets_name once and store result
+    parts = secrets_name.split(".", 1)  # maxsplit=1 since we only need at most 2 parts
 
-    return _value
+    # Use dict for parameter construction
+    params = {"secret_id": parts[0]}
+
+    # Only add json_field if it exists
+    if len(parts) > 1:
+        params["json_field"] = parts[1]
+
+    return SecretValue.secrets_manager(**params).to_string()
 
 
 def get_ssm_value(scope, parameter_name: str):
@@ -60,30 +58,47 @@ def get_ssm_value(scope, parameter_name: str):
     return _value
 
 
-def replace_ssm_in_config(scope, input_config):
+def replace_ssm_in_config(scope, temp_config: dict) -> dict:
     """Replaces SSM and secret values in a configuration dictionary.
 
     Args:
         scope (cdk.Construct): The construct scope.
-        input_config: The configuration dictionary, list, or value.
+        temp_config (dict): The configuration dictionary.
 
     Returns:
-        The updated configuration with SSM and secret values replaced.
-
-    This function recursively searches the configuration for strings
-    containing "SSM:" or "SECRET:". These values are replaced by calling
-    get_ssm_value() or get_secret_value() respectively. The configuration is
-    searched at all levels to support nested structures. It handles different
-    data types including dictionaries, lists, and strings, ensuring a thorough
-    replacement process throughout the entire configuration structure.
+        dict: The updated configuration dictionary with SSM and secret values replaced.
     """
-    if isinstance(input_config, dict):
-        return {key: replace_ssm_in_config(scope, value) for key, value in input_config.items()}
-    elif isinstance(input_config, list):
-        return [replace_ssm_in_config(scope, item) for item in input_config]
-    elif isinstance(input_config, str):
-        if input_config.startswith("SSM:"):
-            return get_ssm_value(scope, parameter_name=input_config[4:])
-        elif input_config.startswith("SECRET:"):
-            return get_secret_value(secrets_name=input_config[7:])
-    return input_config
+    def process_value(value, parent_dict, key=None, list_index=None):
+        """Helper function to process individual values"""
+        if isinstance(value, str):
+            if "SSM:" in value:
+                new_value = get_ssm_value(scope, parameter_name=value.replace("SSM:", ""))
+                if list_index is not None:
+                    parent_dict[key][list_index] = new_value
+                else:
+                    parent_dict[key] = new_value
+            elif "SECRET:" in value:
+                new_value = get_secret_value(secrets_name=value.replace("SECRET:", ""))
+                if list_index is not None:
+                    parent_dict[key][list_index] = new_value
+                else:
+                    parent_dict[key] = new_value
+        return value
+
+    def recursive_replace(config):
+        """Recursively process all values in the configuration"""
+        if isinstance(config, dict):
+            for key, value in config.items():
+                if isinstance(value, (dict, list)):
+                    recursive_replace(value)
+                else:
+                    process_value(value, config, key)
+        elif isinstance(config, list):
+            for i, item in enumerate(config):
+                if isinstance(item, dict):
+                    recursive_replace(item)
+                else:
+                    process_value(item, config, list_index=i)
+
+    recursive_replace(temp_config)
+    return temp_config
