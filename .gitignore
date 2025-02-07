@@ -21,3 +21,9 @@ logs
 # UnitTests
 .coverage
 .tox
+
+# Binaries
+*.zip
+
+# Local Test
+test-api-run.json

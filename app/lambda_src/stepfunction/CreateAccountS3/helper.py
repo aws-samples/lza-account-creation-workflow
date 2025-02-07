@@ -417,10 +417,12 @@ class HelperCodePipeline:
 
         Args:
             execution_id (str): The CodePipeline execution ID for a released run
-            max_attempts (int): The maximum number of attempts to check the status of the execution before raising an exception. Defaults to 5.
+            max_attempts (int): The maximum number of attempts to check the status 
+                of the execution before raising an exception. Defaults to 5.
 
         Returns:
-            str: The status of the execution 'Cancelled'|'InProgress'|'Stopped'|'Stopping'|'Succeeded'|'Superseded'|'Failed'
+            str: The status of the execution 'Cancelled'|'InProgress'|'Stopped'|
+                'Stopping'|'Succeeded'|'Superseded'|'Failed'
         """
         _attempts = 0
         while True:

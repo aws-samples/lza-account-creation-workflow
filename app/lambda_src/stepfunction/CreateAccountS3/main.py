@@ -3,6 +3,7 @@
 
 import json
 import logging
+import time
 import os
 import tempfile
 import zipfile
@@ -54,12 +55,15 @@ def lambda_handler(event, context):
 
         # If not AccountEmail is provided generate one based on account name
         if not account_info.get('AccountEmail'):
-            account_info['AccountEmail'] = build_root_email_address(account_name=account_info['AccountName'])
+            account_info['AccountEmail'] = build_root_email_address(
+                account_name=account_info['AccountName']
+            )
 
         if account_info.get('BypassCreation') == 'false':
             # Setup CodePipeline Class
             code_pipeline = HelperCodePipeline(
-                os.getenv('LZA_CODEPIPELINE_NAME', 'AWSAccelerator-Pipeline'))
+                os.getenv('LZA_CODEPIPELINE_NAME', 'AWSAccelerator-Pipeline')
+            )
 
             LOGGER.info("Account_info: %s", account_info)
 
@@ -77,7 +81,7 @@ def lambda_handler(event, context):
                 # Unzip archive
                 with zipfile.ZipFile(tmpdir+"/"+s3_file, 'r') as zip_ref:
                     zip_ref.extractall(tmpdir+"/unzipped")
-                    print(tmpdir+"/unzipped")
+                    LOGGER.info(tmpdir+"/unzipped")
 
                     validate_ou_in_config(
                         path_to_file=tmpdir+"/unzipped/organization-config.yaml",
@@ -96,14 +100,42 @@ def lambda_handler(event, context):
                         zip_file_name="aws-accelerator-config"
                     )
 
-                    print(f"Uploading {new_zip_file} to {s3_bucket}/{s3_object_key}")
-                    s3_client.upload_file(
-                        Filename=new_zip_file,
-                        Bucket=s3_bucket,
-                        Key=s3_object_key
-                    )
+                    LOGGER.info(f"Uploading {new_zip_file} to {s3_bucket}/{s3_object_key}")
+                    with open(new_zip_file, 'rb') as file:
+                        upload_version=s3_client.put_object(
+                            Bucket=s3_bucket,
+                            Key=s3_object_key,
+                            Body=file
+                        )['VersionId']
 
-            pipeline_execution_id = code_pipeline.start_execution()
+            # Check if push to S3 trigger the pipeline
+            LOGGER.info("Checking if uploade triggered the Pipeline")
+            pipeline_execution_id = None
+            count = 0
+
+            LOGGER.info(f"Looking for S3 Object Version: {upload_version}")
+            # Wait a total of 21 seconds to see if CodePipeline is triggered automatically
+            while count < 7:
+                LOGGER.info("Sleeping 3 seconds to see if the uploads triggers the pipeline")
+                time.sleep(3)
+
+                pipeline_executions = code_pipeline.other_running_executions()
+                for execution in pipeline_executions:
+                    for source_revision in execution['sourceRevisions']:
+                        if (source_revision['actionName'] == 'Configuration' and
+                            source_revision['revisionId'] == upload_version):
+                            pipeline_execution_id = execution['pipelineExecutionId']
+                            LOGGER.info(f"Upload triggered Pipeline Execution:{pipeline_execution_id}")
+
+                if pipeline_execution_id:
+                    break
+
+                count += 1
+
+            if not pipeline_execution_id:
+                LOGGER.info("Upload did NOT trigger pipeline. Starting Pipeline Execution")
+                pipeline_execution_id = code_pipeline.start_execution()
+
             pipeline_execution_status = code_pipeline.status(pipeline_execution_id)
 
             payload['CodePipeline'] = {
