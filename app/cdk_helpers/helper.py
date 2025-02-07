@@ -58,12 +58,12 @@ def get_ssm_value(scope, parameter_name: str):
     return _value
 
 
-def replace_ssm_in_config(scope, temp_config: dict) -> dict:
+def replace_ssm_in_config(scope, input_config: dict) -> dict:
     """Replaces SSM and secret values in a configuration dictionary.
 
     Args:
         scope (cdk.Construct): The construct scope.
-        temp_config (dict): The configuration dictionary.
+        input_config (dict): The configuration dictionary.
 
     Returns:
         dict: The updated configuration dictionary with SSM and secret values replaced.
@@ -100,5 +100,5 @@ def replace_ssm_in_config(scope, temp_config: dict) -> dict:
                 else:
                     process_value(item, config, list_index=i)
 
-    recursive_replace(temp_config)
-    return temp_config
+    recursive_replace(input_config)
+    return input_config
