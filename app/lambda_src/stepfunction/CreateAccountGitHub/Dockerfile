@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-FROM public.ecr.aws/lambda/python:3.12.2024.05.24.18
+FROM public.ecr.aws/lambda/python:3.12.2024.05.24.18@sha256:2f2a8564374a04e569a1a039975b4627edd32a80f331bf7d5643af5a4fdcba3b
 
 # Set env variables
 ARG wd=/var/task/
