@@ -241,7 +241,7 @@ def update_account_config_file(
         )
         raise MatchingAccountNameInConfigException(
             "The accounts-config.yaml already contains an account with the name of "
-            f"{config_info['name']} and the force update flag is set to False"
+            f"{account_info['AccountName']} and the force update flag is set to False"
         )
     else:
         account_config["workloadAccounts"].append(config_info)
