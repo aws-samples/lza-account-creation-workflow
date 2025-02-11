@@ -26,4 +26,4 @@ logs
 *.zip
 
 # Local Test
-test-api-run.json
+test-api-run-*.json

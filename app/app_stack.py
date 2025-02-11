@@ -153,7 +153,7 @@ class AccountCreationWorkflowStack(Stack):
             )
             
         events.Rule(self, "rEventRuleAccountTagToSsmParameter",
-            event_bus=i_event_bus,                    
+            event_bus=i_event_bus,
             event_pattern=events.EventPattern(
                 detail={
                     "eventSource": ["organizations.amazonaws.com"],
