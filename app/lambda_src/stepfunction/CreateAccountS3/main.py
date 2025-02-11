@@ -111,11 +111,10 @@ def lambda_handler(event, context):
             # Check if push to S3 trigger the pipeline
             LOGGER.info("Checking if uploade triggered the Pipeline")
             pipeline_execution_id = None
-            count = 0
 
             LOGGER.info(f"Looking for S3 Object Version: {upload_version}")
             # Wait a total of 21 seconds to see if CodePipeline is triggered automatically
-            while count < 7:
+            for count in range(7):
                 LOGGER.info("Sleeping 3 seconds to see if the uploads triggers the pipeline")
                 time.sleep(3)
 
@@ -129,8 +128,6 @@ def lambda_handler(event, context):
 
                 if pipeline_execution_id:
                     break
-
-                count += 1
 
             if not pipeline_execution_id:
                 LOGGER.info("Upload did NOT trigger pipeline. Starting Pipeline Execution")
