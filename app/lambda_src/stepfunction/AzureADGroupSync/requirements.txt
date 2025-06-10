@@ -3,4 +3,4 @@
 
 urllib3==1.26.19
 msal==1.20.0
-requests==2.32.2
+requests==2.32.4
