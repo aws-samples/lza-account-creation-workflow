@@ -3,5 +3,5 @@
 
 requests==2.32.2
 urllib3==1.26.19
-GitPython==3.1.41
+GitPython==3.1.47
 pyyaml==6.0.1
