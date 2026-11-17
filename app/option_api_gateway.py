@@ -12,10 +12,12 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_logs as logs
 )
+from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_function
+from app.cdk_helpers.nag_helper import partition_variants
 
 
-def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, retention_role: iam.IRole,
+def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                       lambda_key: kms.IKey):
     """
     Set up API Gateway for the account creation workflow.
@@ -24,7 +26,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         scope (Construct): The construct scope.
         config (dict): The configuration dictionary. 
         boto3_layer (ILayerVersion): The Lambda layer for AWS SDK.
-        retention_role (IRole): The role for Lambda function logs retention.
         lambda_key (IKey): The KMS key for encrypting Lambda function code.
     
     Returns:
@@ -112,7 +113,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to check to see if the AWS Account Name is available to use.',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
@@ -125,8 +125,30 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
             "organizations:DescribeAccount",
             "organizations:ListAccounts"
         ],
+        resources=[f"arn:{partition}:organizations::{account_id}:account/o-*/*"]
+    ))
+    i_name_available.add_to_role_policy(
+        statement=iam.PolicyStatement(
+        actions=[
+            "organizations:DescribeOrganization",
+            "organizations:ListAccounts"
+        ],
         resources=["*"]
     ))
+    NagSuppressions.add_resource_suppressions(
+        i_name_available.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "organizations:DescribeOrganization and "
+                      "organizations:ListAccounts require '*' resource per "
+                      "AWS documentation. DescribeAccount scoped to org "
+                      "account pattern.",
+            "appliesTo": partition_variants([
+                "Resource::*",
+                f"Resource::arn:<AWS::Partition>:organizations::{account_id}:account/o-*/*"
+            ])
+        }]
+    )
 
     api_check_name = api.root.add_resource("check_name")
     api_check_name.add_method(
@@ -144,7 +166,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to kick off the Account Creation StepFunction',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
@@ -211,7 +232,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to check the status of the Account Creation.',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
@@ -239,6 +259,45 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         integration=apigw.LambdaIntegration(i_get_exec_status),
         method_responses=[{"statusCode": "200"}],
         authorization_type=apigw.AuthorizationType.IAM
+    )
+
+    # Per-resource cdk-nag suppressions for API Gateway
+    NagSuppressions.add_resource_suppressions(
+        api,
+        [
+            {
+                "id": "AwsSolutions-COG4",
+                "reason": "API uses IAM authorization (SigV4), not Cognito. "
+                          "IAM auth is appropriate for service-to-service and "
+                          "CLI access patterns."
+            },
+            {
+                "id": "AwsSolutions-APIG2",
+                "reason": "The POST /execute method uses a request validator "
+                          "(AccountCreationRequestValidator). The GET methods "
+                          "take no request body and only optional query "
+                          "strings that the Lambda functions validate."
+            },
+            {
+                "id": "AwsSolutions-IAM4",
+                "reason": "API Gateway CloudWatch role uses the "
+                          "AmazonAPIGatewayPushToCloudWatchLogs managed policy "
+                          "which is the standard approach for API Gateway logging."
+            }
+        ],
+        apply_to_children=True
+    )
+    NagSuppressions.add_resource_suppressions(
+        i_get_exec_status.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "GetExecutionStatus must access any execution of the "
+                      "step function. Execution names are dynamic. Scoped to "
+                      "specific state machine name with wildcard execution ID.",
+            "appliesTo": partition_variants([
+                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}:*"
+            ])
+        }]
     )
 
     # If you would like to deploy a user with credentials to access API Gateway, add a user name to the config file

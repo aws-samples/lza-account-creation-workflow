@@ -1,7 +1,10 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-from app.lambda_src.stepfunction.CreateAccount import helper
+from app.lambda_src.stepfunction.CreateAccountS3 import helper
+from app.lambda_layer.account_creation_helper.python.account_creation_helper import (
+    HelperCodePipeline
+)
 import pytest
 from unittest.mock import patch
 import boto3
@@ -55,12 +58,6 @@ def test_get_provisioning_artifact_id_no_product(
         helper.get_provisioning_artifact_id(
             "fakeProduct", stubbed_servicecatalog_client_describe_product
         )
-
-
-def test_check_delay():
-    """Test check delay method"""
-    test_delay = helper.check_delay()
-    assert test_delay == 5
 
 
 def test_build_service_catalog_parameters():
@@ -133,35 +130,31 @@ def test_tags_to_dict():
 
 def test_codepipeline_get_status(stubbed_get_codepipeline_execution):
     """Test codepipeline_get_status method"""
-    helper_class = helper.HelperCodePipeline(
-        "testPipeline", stubbed_get_codepipeline_execution
-    )
+    helper_class = HelperCodePipeline("testPipeline")
+    helper_class.cp_client = stubbed_get_codepipeline_execution
     test_status = helper_class.status("testPipelineExecutionId")
     assert test_status == "Succeeded"
 
 
 def test_get_codepipeline(mocked_codepipeline_client):
     """Test get_codepipeline method"""
-    helper_class = helper.HelperCodePipeline(
-        "test-pipeline", mocked_codepipeline_client
-    )
+    helper_class = HelperCodePipeline("test-pipeline")
+    helper_class.cp_client = mocked_codepipeline_client
     assert helper_class.get()["pipeline"]["name"] == "test-pipeline"
 
 
 def test_get_codepipeline_no_pipeline(mocked_codepipeline_client):
     """Test get_codepipeline method"""
-    helper_class = helper.HelperCodePipeline(
-        "fake-pipeline", mocked_codepipeline_client
-    )
+    helper_class = HelperCodePipeline("fake-pipeline")
+    helper_class.cp_client = mocked_codepipeline_client
     with pytest.raises(mocked_codepipeline_client.exceptions.PipelineNotFoundException):
         helper_class.get()
 
 
 def test_other_running_executions(stubbed_list_codepipeline_running_executions):
     """Test get_codepipeline_execution method"""
-    helper_class = helper.HelperCodePipeline(
-        "testPipeline", stubbed_list_codepipeline_running_executions
-    )
+    helper_class = HelperCodePipeline("testPipeline")
+    helper_class.cp_client = stubbed_list_codepipeline_running_executions
     running_executions = helper_class.other_running_executions()
     assert len(running_executions) == 1
     assert running_executions[0]["pipelineExecutionId"] == "testPipelineExecution123"
@@ -169,16 +162,18 @@ def test_other_running_executions(stubbed_list_codepipeline_running_executions):
 
 def test_start_pipeline_execution(stubbed_start_pipeline_execution):
     """Test start_pipeline_execution method"""
-    helper_class = helper.HelperCodePipeline(
-        "testPipeline", stubbed_start_pipeline_execution
-    )
+    helper_class = HelperCodePipeline("testPipeline")
+    helper_class.cp_client = stubbed_start_pipeline_execution
     test_execution = helper_class.start_execution()
     assert test_execution == "testPipelineExecution123"
 
 
 def test_decomission_process_running(stubbed_list_builds_and_batch_get):
-    """Test get_codepipeline_execution method"""
-    running_executions = helper.decommission_process_running(
+    """Test decommission_process_running method"""
+    from app.lambda_layer.account_creation_helper.python.account_creation_helper import (
+        decommission_process_running
+    )
+    running_executions = decommission_process_running(
         cb_client=stubbed_list_builds_and_batch_get
     )
     assert len(running_executions) == 1
@@ -186,21 +181,32 @@ def test_decomission_process_running(stubbed_list_builds_and_batch_get):
 
 
 def test_status_with_exception(aws_credentials):
-    """Test get_codepipeline_execution method"""
+    """Test codepipeline status retry and exception"""
     cp_client = boto3.client("codepipeline")
-    with patch(
-        "app.lambda_src.stepfunction.CreateAccount.helper.HelperCodePipeline.cp_client.get_pipeline_execution",
-        side_effect=cp_client.exceptions.PipelineExecutionNotFoundException(
-            operation_name="get_pipeline_execution",
-            error_response={"Error": {"Code": "PipelineExecutionNotFoundException"}},
-        ),
-    ):
-        cp_helper = helper.HelperCodePipeline("testPipeline")
+    cp_helper = HelperCodePipeline("testPipeline")
 
-        with pytest.raises(cp_client.exceptions.PipelineExecutionNotFoundException):
-            cp_helper.status(
-                execution_id="18b2c6da-2625-4b2e-a518-985884ea6ad2", max_attempts=1
-            )
+    mock_client = patch.object(
+        cp_helper, 'cp_client'
+    ).start()
+    mock_client.get_pipeline_execution.side_effect = \
+        cp_client.exceptions.PipelineExecutionNotFoundException(
+            operation_name="get_pipeline_execution",
+            error_response={
+                "Error": {
+                    "Code": "PipelineExecutionNotFoundException"
+                }
+            },
+        )
+    mock_client.exceptions = cp_client.exceptions
+
+    with pytest.raises(
+        cp_client.exceptions.PipelineExecutionNotFoundException
+    ):
+        cp_helper.status(
+            execution_id="18b2c6da-2625-4b2e-a518-985884ea6ad2",
+            max_attempts=1
+        )
+    patch.stopall()
 
 
 BASE_ACCOUNT_CONFIG_TEXT = """
@@ -314,8 +320,12 @@ def test_update_existing_raises_exception(tmpdir):
         "ManagedOrganizationalUnit": "testOU",
     }
 
-    with pytest.raises(helper.MatchingAccountNameInConfigException):
+    with pytest.raises(helper.MatchingAccountNameInConfigException) as exc:
         helper.update_account_config_file(test_file, account_info)
+
+    # FR1: message keeps naming the account and the force-update flag
+    assert "SharedServices" in str(exc.value)
+    assert "force-update flag is False" in str(exc.value)
 
 
 BASE_OU_CONFIG_TEXT = """

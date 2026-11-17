@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT-0
 
 pytest==9.0.3
-pytest-cov==4.1.0
-tox==3.20.1
-boto3==1.34.122
-moto==4.2.11
-msal==1.26.0
-requests_mock==1.11.0
+pytest-cov==6.1.1
+tox==4.23.2
+boto3==1.38.0
+moto==5.1.2
+msal==1.31.1
+requests_mock==1.12.1
 aws-cdk-lib>=2.164.1
 constructs>=10.0.0,<11.0.0
 cdk-nag==2.30.1

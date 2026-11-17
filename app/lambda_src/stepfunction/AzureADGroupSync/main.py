@@ -4,6 +4,9 @@
 import json
 import logging
 import os
+
+from botocore.exceptions import ClientError
+
 from helpers import get_secret_value
 from ms_graph_api import (
     MsGraphApiConnection,
@@ -19,12 +22,10 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """
-    Handles Lambda function triggered by AWS Step Functions.
+    """Sync Azure Active Directory groups to AWS Identity Center.
 
-    The function syncs Azure Active Directory groups to AWS Identity 
-    Center by looking up group IDs and adding them to the SSO 
-    application. It returns the updated payload.
+    Looks up group IDs in Azure AD, adds them to the SSO application,
+    and triggers synchronization to AWS Identity Center.
 
     Args:
         event (dict): The event payload containing account info
@@ -33,9 +34,9 @@ def lambda_handler(event, context):
     Returns:
         dict: The updated payload
     """
-    try:
-        LOGGER.info(json.dumps(event))
+    LOGGER.debug('Event: %s', json.dumps(event))
 
+    try:
         payload = event["Payload"]
         account_info = payload["AccountInfo"]
 
@@ -58,7 +59,9 @@ def lambda_handler(event, context):
 
         # List of dictionaries
         # Ex. [{"PermissionSetName":"CustomerAccountAdmin","ActiveDirectoryGroupName":"platform-admin"}]
-        ad_group_names = list(x['ActiveDirectoryGroupName'] for x in account_info["ADIntegration"])
+        ad_group_names = list(
+            x['ActiveDirectoryGroupName'] for x in account_info["ADIntegration"]
+        )
 
         for ad_group_name in ad_group_names:
             try:
@@ -70,22 +73,22 @@ def lambda_handler(event, context):
 
             except KeyError as group_not_found:
                 raise GraphApiRequestException(
-                    f"The given group was not found in Azure AD {account_info['AzureADGroupName']}"
+                    "The given group was not found in Azure AD: %s" % ad_group_name
                 ) from group_not_found
 
-        LOGGER.info("AD Group Id Mappings %s", group_id_mapping)
+        LOGGER.info("AD Group Id Mappings: %s", group_id_mapping)
 
         # Add group to AWS Identity Center Azure AD application
         LOGGER.info(
-            "Attempting to move the group %s into the SSO sync application",
+            "Attempting to move group %s into the SSO sync application",
             group_api.group_id,
         )
         try:
             sso_response = group_api.add_group_to_sso(
                 graph_api_secret["object_id"], graph_api_secret["app_role_id"]
             )
-            LOGGER.info("SSO Add Response:")
-            LOGGER.info(sso_response.json())
+            LOGGER.info("SSO Add Response status: %s", sso_response.status_code)
+            LOGGER.debug("SSO Add Response body: %s", sso_response.json())
 
         except GraphApiRequestException as graph_api_exception:
             if "Permission being assigned already exists on the object" in str(
@@ -93,7 +96,7 @@ def lambda_handler(event, context):
             ):
                 LOGGER.info("Group already exists in SSO application, skipping")
             else:
-                raise graph_api_exception
+                raise
 
         # Synchronization
         LOGGER.info(
@@ -102,9 +105,20 @@ def lambda_handler(event, context):
         sync = Synchronizer(api, graph_api_secret["object_id"])
         sync.sync_azure_ad_aws_identity_center()
 
-        LOGGER.info("Payload: %s", payload)
+        LOGGER.info("Payload keys: %s", list(payload.keys()))
         return payload
 
-    except Exception as general_exception:
-        LOGGER.exception(str(general_exception))
-        raise TypeError(str(general_exception)) from general_exception
+    except GraphApiRequestException as graph_err:
+        LOGGER.error("Graph API error: %s", graph_err)
+        raise RuntimeError(str(graph_err)) from graph_err
+    except ClientError as client_err:
+        LOGGER.error(
+            "AWS API error: %s", client_err.response['Error']['Message']
+        )
+        raise RuntimeError(str(client_err)) from client_err
+    except KeyError as key_err:
+        LOGGER.error("Missing required key in payload: %s", key_err)
+        raise RuntimeError(str(key_err)) from key_err
+    except Exception as e:
+        LOGGER.exception("Unexpected error in AzureADGroupSync")
+        raise RuntimeError(str(e)) from e

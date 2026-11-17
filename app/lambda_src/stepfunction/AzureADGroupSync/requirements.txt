@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: MIT-0
 
 urllib3==2.7.0
-msal==1.20.0
+msal==1.31.1
 requests==2.33.0

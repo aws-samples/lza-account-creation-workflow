@@ -41,8 +41,8 @@ class ValidateS3:
             dict: Validation result
         """
         # update bucket name to reflect account name and region
-        bucket_name.replace("{{ account }}", self.account)
-        bucket_name.replace("{{ region }}", self.region)
+        bucket_name = bucket_name.replace("{{ account }}", self.account)
+        bucket_name = bucket_name.replace("{{ region }}", self.region)
 
         LOGGER.info(f"Checking if S3 Bucket ({bucket_name}) exists.")
         _results = self.s3_client.list_buckets()['Buckets']

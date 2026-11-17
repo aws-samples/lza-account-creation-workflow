@@ -37,4 +37,4 @@ def send_sns_message(error: str, account_name='test', topic=os.getenv('SNS_FAILU
         Message=message,
         Subject=subject
     )
-    print(response)
+    LOGGER.debug(response)

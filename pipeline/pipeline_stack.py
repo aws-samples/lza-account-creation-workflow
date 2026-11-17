@@ -7,6 +7,7 @@ import aws_cdk as cdk
 from constructs import Construct
 from aws_cdk import (
     Stack,
+    Duration,
     RemovalPolicy,
     Tags,
     Aspects,
@@ -16,7 +17,11 @@ from aws_cdk import (
     aws_codepipeline_actions as codepipeline_actions
 )
 from cdk_nag import NagSuppressions, AwsSolutionsChecks
+from app.cdk_helpers.helper import LZA_SSM_VALUE_PATTERNS, get_ssm_parameter_names
 from pipeline.pipeline_app_stage import PipelineAppStage
+
+# Days after which server access logs are deleted
+ACCESS_LOG_EXPIRATION_DAYS = 90
 
 
 class PipelineStack(cdk.Stack):
@@ -27,6 +32,40 @@ class PipelineStack(cdk.Stack):
     It includes the source, build, and deployment stages, along with necessary resources
     such as S3 buckets and IAM roles.
     """
+
+    def create_access_log_bucket(self):
+        """
+        Creates the S3 bucket that receives server access logs of the pipeline buckets.
+
+        The bucket uses SSE-S3 because S3 server access logging cannot deliver
+        to a bucket that is encrypted with AWS KMS. Objects expire after 90 days.
+        """
+        self.access_log_bucket = s3.Bucket(
+            self,
+            self.construct_prefix+"AccessLogsS3Bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            enforce_ssl=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="ExpireAccessLogs",
+                    expiration=Duration.days(ACCESS_LOG_EXPIRATION_DAYS)
+                )
+            ]
+        )
+
+        NagSuppressions.add_resource_suppressions(
+            self.access_log_bucket,
+            [
+                {
+                    "id": "AwsSolutions-S1",
+                    "reason": "This bucket is the destination of the server access "
+                              "logs of the pipeline buckets and does not log to itself."
+                }
+            ]
+        )
 
     def create_pipeline_source_bucket(self, config: dict):
         """
@@ -49,17 +88,37 @@ class PipelineStack(cdk.Stack):
             auto_delete_objects=True,
             bucket_name=src_bucket_name,
             enforce_ssl=True,
-            versioned=True
+            versioned=True,
+            server_access_logs_bucket=self.access_log_bucket,
+            server_access_logs_prefix="source-bucket/"
         )
 
-        NagSuppressions.add_resource_suppressions(
-            self.source_bucket,
-            [
-                {
-                    "id": "AwsSolutions-S1",
-                    "reason": "The S3 Bucket has server access logs disabled."
+    def enable_artifact_bucket_access_logs(self, artifact_bucket: s3.IBucket):
+        """
+        Sends the server access logs of the CDK Pipelines artifact bucket to the access-log bucket.
+
+        The artifact bucket is created inside CDK Pipelines and exposes no access-log
+        property, so the underlying CloudFormation resource is changed.
+
+        Args:
+            artifact_bucket (s3.IBucket): The artifact bucket the pipeline uses.
+        """
+        artifact_bucket.node.default_child.logging_configuration = s3.CfnBucket.LoggingConfigurationProperty(
+            destination_bucket_name=self.access_log_bucket.bucket_name,
+            log_file_prefix="artifact-bucket/"
+        )
+        self.access_log_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="S3ServerAccessLogsFromArtifactBucket",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("logging.s3.amazonaws.com")],
+                actions=["s3:PutObject"],
+                resources=[self.access_log_bucket.arn_for_objects("artifact-bucket/*")],
+                conditions={
+                    "ArnLike": {"aws:SourceArn": artifact_bucket.bucket_arn},
+                    "StringEquals": {"aws:SourceAccount": Stack.of(self).account}
                 }
-            ]
+            )
         )
 
     def create_pipeline(self, config: dict):
@@ -74,30 +133,12 @@ class PipelineStack(cdk.Stack):
         """
         # Get current stack name
         stack = Stack.of(self)
-        region = stack.region
-        account = stack.account
 
         pipeline_name = config['deployInfrastructure']['codepipeline']['pipelineName']
 
-        # Create an S3 bucket CodePipeline Artifacts
-        self.pipeline_bucket = s3.Bucket(
-            self,
-            self.construct_prefix+"PipelineS3Bucket",
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            bucket_name=f"{pipeline_name}-{region}-{account}",
-            enforce_ssl=True
-        )
-
-        NagSuppressions.add_resource_suppressions(
-            self.pipeline_bucket,
-            [
-                {
-                    "id": "AwsSolutions-S1",
-                    "reason": "The S3 Bucket has server access logs disabled."
-                }
-            ]
-        )
+        # SSM parameter names have to be read before the application stage is
+        # created, because the application stack replaces the "SSM:" values.
+        lza_ssm_parameter_names = get_ssm_parameter_names(config['appInfrastructure'], LZA_SSM_VALUE_PATTERNS)
 
         # Create a Pipeline
         source = pipelines.CodePipelineSource.s3(
@@ -151,17 +192,33 @@ class PipelineStack(cdk.Stack):
         # Builds CodePipeline to allow for Suppression
         pipeline.build_pipeline()
 
+        # Synth lookups of the SSM parameters. A synth CodeBuild project cannot
+        # assume the CDK bootstrap lookup role unless it is granted
+        # sts:AssumeRole on it, which this pipeline does not do. The CDK CLI
+        # then falls back to the credentials of the synth project's own role,
+        # so that role needs ssm:GetParameter on exactly these parameters.
+        if lza_ssm_parameter_names:
+            pipeline.synth_project.role.add_to_principal_policy(
+                iam.PolicyStatement(
+                    actions=["ssm:GetParameter"],
+                    resources=[
+                        f"arn:{stack.partition}:ssm:{stack.region}:{stack.account}:parameter{name}"
+                        for name in lza_ssm_parameter_names
+                    ],
+                    effect=iam.Effect.ALLOW
+                )
+            )
+
         # Cleanup CodePipeline Artifact Bucket during Cfn Stack Deletion
         pipeline_bucket = pipeline.pipeline.artifact_bucket
         pipeline_bucket.apply_removal_policy(RemovalPolicy.DESTROY)
 
+        # Server access logs of the artifact bucket go to the access-log bucket
+        self.enable_artifact_bucket_access_logs(pipeline_bucket)
+
         NagSuppressions.add_resource_suppressions(
             pipeline,
             [
-                {
-                    "id": "AwsSolutions-S1",
-                    "reason": "The S3 Bucket has server access logs disabled."
-                },
                 {
                     "id": "AwsSolutions-IAM5",
                     "reason": "The IAM entity contains wildcard permissions and does not " \
@@ -194,7 +251,8 @@ class PipelineStack(cdk.Stack):
 
         self.construct_prefix = config['appInfrastructure'].get('constructPrefix')
 
-        # Create Source S3 Bucket
+        # Create Access Log S3 Bucket and Source S3 Bucket
+        self.create_access_log_bucket()
         self.create_pipeline_source_bucket(config=config)
 
         # CodePipeline Setup

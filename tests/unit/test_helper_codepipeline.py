@@ -4,16 +4,17 @@
 
 import boto3
 
-from app.lambda_src.stepfunction.CreateAccount.helper import HelperCodePipeline
+from app.lambda_layer.account_creation_helper.python.account_creation_helper import (
+    HelperCodePipeline
+)
 from moto import mock_codepipeline
 from moto.core import DEFAULT_ACCOUNT_ID
 
 
 def test_instantiate_helper(aws_credentials):
     with mock_codepipeline():
-        cph = HelperCodePipeline(
-            "AWSAccelerator-Pipeline", boto3.client("codepipeline")
-        )
+        cph = HelperCodePipeline("AWSAccelerator-Pipeline")
+        cph.cp_client = boto3.client("codepipeline")
         assert cph.pipeline_name == "AWSAccelerator-Pipeline"
 
 

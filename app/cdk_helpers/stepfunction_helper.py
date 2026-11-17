@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_logs as logs,
     Duration
 )
+from cdk_nag import NagSuppressions
 
 
 def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str) -> sfn.StateMachine:
@@ -34,6 +35,20 @@ def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str)
             destination=log_group,
             level=sfn.LogLevel.ALL
         )
+    )
+
+    # CloudWatch Logs delivery and X-Ray actions that CDK adds to the state
+    # machine role do not support resource-level permissions.
+    NagSuppressions.add_resource_suppressions(
+        stepfunction.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "Step Functions logging (logs:CreateLogDelivery and "
+                      "related actions) and tracing (xray:Put*) require '*' "
+                      "as resource because those APIs support no resource-level "
+                      "permissions.",
+            "appliesTo": ["Resource::*"]
+        }]
     )
 
     return stepfunction

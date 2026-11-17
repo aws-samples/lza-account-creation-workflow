@@ -21,8 +21,11 @@ def create_account_assignment_for_group(account_id: str, permission_set_arn: str
 
     Args:
         account_id (str): AWS Account ID
-        permission_set_name (str): Identity and Access Management permission set name
-        group_name (str): Identity and Access Management group name
+        permission_set_arn (str): Identity and Access Management
+            permission set ARN
+        group_guid (str): Identity and Access Management group GUID
+        instance_arn (str): AWS SSO instance ARN
+        test_client (boto3.client): Optional boto3 client for testing
 
     Returns:
         dict: boto3 response

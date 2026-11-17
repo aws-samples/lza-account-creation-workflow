@@ -2,72 +2,108 @@
 # SPDX-License-Identifier: MIT-0
 
 import os
+import re
 import logging
 import json
+
 import boto3
+from botocore.exceptions import ClientError
 
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 LOGGER = logging.getLogger()
 LOGGER.setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
 logging.getLogger("botocore").setLevel(logging.ERROR)
 
+ORG_CLIENT = boto3.client("organizations")
+
+ACCOUNT_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9\-]{1,48}[a-zA-Z0-9]$')
+
 
 def lambda_handler(event, context):
     """
-    Handles Lambda function requests and returns responses.
+    Checks if an AWS account name is already in use in Organizations.
 
     Args:
-        event (dict): The event passed by Lambda
+        event (dict): The event passed by API Gateway
         context (object): Lambda Context runtime methods and attributes
 
     Returns:
-        dict: The API response including statusCode and body
+        dict: API response with account ID if name exists, null if available
     """
-    LOGGER.info(json.dumps(event))
-
-    org_client = boto3.client(service_name="organizations")
-    response = ''
+    LOGGER.info("NameAvailability invoked")
 
     try:
-        # Get account name from API Parameter 
-        requested_name = event['queryStringParameters'].get('account_name')
+        query_params = event.get('queryStringParameters') or {}
+        requested_name = query_params.get('account_name')
 
         if not requested_name:
-            raise Exception("Please specify \"account_name\" as API Parameter.")
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "error": {
+                        "code": "MISSING_PARAMETER",
+                        "message": "account_name query parameter is required",
+                        "field": "account_name"
+                    }
+                }),
+                "isBase64Encoded": False,
+                "headers": {"content-type": "application/json"}
+            }
 
-        # List all existing accounts
-        list_accounts_paginator = org_client.get_paginator('list_accounts')
+        if not ACCOUNT_NAME_PATTERN.match(requested_name):
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "account_name must be 3-50 alphanumeric characters and hyphens",
+                        "field": "account_name"
+                    }
+                }),
+                "isBase64Encoded": False,
+                "headers": {"content-type": "application/json"}
+            }
+
+        # List all existing accounts and check for name match
+        list_accounts_paginator = ORG_CLIENT.get_paginator('list_accounts')
         accounts_list = list_accounts_paginator.paginate()
-        account_id = next(accounts_list.search(f"Accounts[?Name == `{requested_name}`].Id"), "")
+        account_id = next(
+            accounts_list.search(f"Accounts[?Name == `{requested_name}`].Id"),
+            ""
+        )
 
-        if account_id:
-            response_body = account_id
-        else:
-            response_body = None
+        response_body = account_id if account_id else None
 
-        # Building response for Api Call
-        response = {
+        return {
             "statusCode": 200,
             "body": json.dumps(response_body),
             "isBase64Encoded": False,
-            "headers": {
-                "content-type": "application/json"
-            }
+            "headers": {"content-type": "application/json"}
         }
 
-    except Exception as err:
-        LOGGER.exception(err)
-
-        # Building response for Api Call
-        response = {
-            "statusCode": 404,
-            "body": f'{"Failure": {err}}',
+    except ClientError as err:
+        LOGGER.error("AWS API error in NameAvailability: %s", err)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": {
+                    "code": "AWS_ERROR",
+                    "message": "Internal service error"
+                }
+            }),
             "isBase64Encoded": False,
-            "headers": {
-                "content-type": "application/json"
-            }
+            "headers": {"content-type": "application/json"}
         }
-
-    finally:
-        LOGGER.info(response)
-        return response
+    except Exception as err:
+        LOGGER.exception("Unexpected error in NameAvailability")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal service error"
+                }
+            }),
+            "isBase64Encoded": False,
+            "headers": {"content-type": "application/json"}
+        }

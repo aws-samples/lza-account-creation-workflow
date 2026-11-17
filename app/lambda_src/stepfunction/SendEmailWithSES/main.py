@@ -6,7 +6,9 @@ import logging
 import json
 from dataclasses import dataclass
 from typing import Tuple, Optional
+
 import boto3
+from botocore.exceptions import ClientError
 
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 LOGGER = logging.getLogger()
@@ -41,14 +43,10 @@ class EmailData:
             self.bcc_list = []
 
     def generate_email_html(self) -> Tuple[str, str]:
-        """Generates HTML and plain text content for an email.
+        """Generate HTML and plain text content for an email.
 
         Returns:
-            Tuple[str, str]: A tuple containing the resulting HTML string and plain text string.
-
-        This method uses the data stored in the EmailData object to generate
-        both HTML and plain text versions of an email. It replaces placeholders
-        in template files with actual data, creating customized email content.
+            Tuple[str, str]: A tuple containing the HTML string and plain text string.
         """
         html = f"""
 <!DOCTYPE  html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional/EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -75,24 +73,24 @@ class EmailData:
 </body>
 </html>
 """
-        text = f"""
-{self.email_heading}\n
-{self.opening_paragraph}\n
-Account ID: {self.account_id}\nAccount Name: {self.account_name}\nSSO Login URL: {self.sso_url}
-        """
+        text = (
+            "%s\n\n%s\n\n"
+            "Account ID: %s\nAccount Name: %s\nSSO Login URL: %s"
+            % (self.email_heading, self.opening_paragraph,
+               self.account_id, self.account_name, self.sso_url)
+        )
 
         return html, text
 
     def send_email(self) -> dict:
-        """Sends email message using SES
-        """
+        """Send email message using SES."""
         email_html, email_text = self.generate_email_html()
         LOGGER.debug('Email html: %s', email_html)
         LOGGER.debug('Email text: %s', email_text)
 
         LOGGER.info('Attempting to send email using info in payload...')
-        ses = boto3.client('ses')
-        result = ses.send_email(
+        ses_client = boto3.client('ses')
+        result = ses_client.send_email(
             Source=os.getenv('FROM_EMAIL_ADDRESS'),
             Destination={
                 'ToAddresses': self.to_addresses,
@@ -109,12 +107,12 @@ Account ID: {self.account_id}\nAccount Name: {self.account_name}\nSSO Login URL:
             SourceArn=os.getenv('SES_IDENTITY_ARN')
         )
         LOGGER.info('Email successfully sent')
-        LOGGER.debug(result)
+        LOGGER.debug('SES response: %s', result)
         return result
 
 
 def lambda_handler(event, context):
-    """Lambda handler for sending account creation emails via SES.
+    """Send account creation notification emails via SES.
 
     Args:
         event (dict): The event dict containing the trigger information and payload.
@@ -122,13 +120,8 @@ def lambda_handler(event, context):
 
     Returns:
         dict: Updated payload including the email sending status.
-
-    This function processes the incoming event, extracts necessary information
-    to create an EmailData object, sends an email using SES, and updates the
-    payload with the email sending status. If an error occurs during execution,
-    it logs the error and raises a TypeError.
     """
-    print(json.dumps(event))
+    LOGGER.debug('Event: %s', json.dumps(event))
     try:
         payload = event['Payload']
         payload['EmailSentToOwner'] = False
@@ -138,8 +131,14 @@ def lambda_handler(event, context):
         payload['EmailSentToOwner'] = True
         return payload
 
-    except Exception as general_exception:
+    except ClientError as client_err:
         LOGGER.error(
-            'There was a problem sending account information to the account owner with SES')
-        LOGGER.error(str(general_exception))
-        raise TypeError(str(general_exception)) from general_exception
+            "SES API error sending email: %s", client_err.response['Error']['Message']
+        )
+        raise RuntimeError(str(client_err)) from client_err
+    except (KeyError, TypeError) as data_err:
+        LOGGER.error("Invalid email data in payload: %s", data_err)
+        raise RuntimeError(str(data_err)) from data_err
+    except Exception as e:
+        LOGGER.exception("Unexpected error in SendEmailWithSES")
+        raise RuntimeError(str(e)) from e

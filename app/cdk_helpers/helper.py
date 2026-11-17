@@ -1,7 +1,51 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-from aws_cdk import SecretValue, aws_ssm as ssm
+import re
+from aws_cdk import Annotations, SecretValue, aws_ssm as ssm
+
+# Values returned while CDK has not resolved the SSM context lookup yet
+# (first synthesis pass). They keep IAM resource ARNs well formed.
+PLACEHOLDER_ARN = "arn:aws:service:us-east-1:123456789012:entity/dummy-value"
+PLACEHOLDER_VALUE = "dummy-value"
+
+# Config keys under appInfrastructure that are read from SSM when the LZA
+# pipeline source is S3, with the format their resolved value must have.
+LZA_SSM_VALUE_PATTERNS = {
+    'lzaPipelineKmsKeyArn': (
+        r"arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key/[0-9a-zA-Z-]+",
+        "a KMS key ARN"
+    ),
+    'lzaConfigBucketName': (
+        r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]",
+        "an S3 bucket name"
+    )
+}
+
+
+def get_ssm_parameter_names(app_config: dict, keys) -> list:
+    """Lists the SSM parameter names that the given config keys reference.
+
+    Only values written as "SSM:<parameter name>" are returned. Nothing is
+    returned when the LZA pipeline source is not S3, because these values are
+    only used for the S3 source. Call this before replace_ssm_in_config, which
+    replaces the "SSM:" values in place.
+
+    Args:
+        app_config (dict): The appInfrastructure section of the config.
+        keys: The config keys to look at.
+
+    Returns:
+        list: The SSM parameter names, in the order of the keys.
+    """
+    if app_config.get('lzaPipelineSource', 'S3') != 'S3':
+        return []
+    names = []
+    for key in keys:
+        value = app_config.get(key)
+        if isinstance(value, str) and value.startswith("SSM:"):
+            names.append(value[len("SSM:"):])
+    return names
 
 
 def get_secret_value(secrets_name: str) -> str:
@@ -44,18 +88,46 @@ def get_ssm_value(scope, parameter_name: str):
         str: The value of the SSM parameter.
 
     This function retrieves the value of an SSM parameter by name. It first uses
-    the CDK's value_from_lookup method to get the parameter value. If the value
-    contains the string 'dummy-value', it will return either a hardcoded ARN
-    or the string 'dummy-value' itself. Otherwise it simply returns the
-    original value retrieved from SSM.
+    the CDK's value_from_lookup method to get the parameter value. While CDK has
+    not resolved the lookup (first synthesis pass), the lookup returns a dummy
+    value and a well-formed placeholder is returned instead. After the lookup is
+    resolved, an empty value adds a CDK error annotation that names the parameter,
+    so that synth exits non-zero. No exception is raised.
     """
     _value = ssm.StringParameter.value_from_lookup(scope, parameter_name)
     if "dummy-value" in _value and "arn" in _value.lower():
-        return "arn:aws:service:us-east-1:123456789012:entity/dummy-value"
+        return PLACEHOLDER_ARN
     if "dummy-value" in _value:
-        return "dummy-value"
+        return PLACEHOLDER_VALUE
+    if not _value or not _value.strip():
+        Annotations.of(scope).add_error(
+            f"SSM parameter '{parameter_name}' is empty. Set it to the value "
+            "that deploy-config.yaml expects."
+        )
 
     return _value
+
+
+def validate_ssm_config_value(scope, parameter_name: str, value: str, pattern: str, description: str) -> None:
+    """Adds a CDK error annotation when a resolved SSM value has an invalid format.
+
+    Placeholder values are skipped because they only appear while CDK has not
+    resolved the lookup yet.
+
+    Args:
+        scope (cdk.Construct): The construct scope the annotation is added to.
+        parameter_name (str): The name of the SSM parameter the value came from.
+        value (str): The resolved value.
+        pattern (str): Regular expression the value must fully match.
+        description (str): Human-readable description of the expected value.
+    """
+    if value in (PLACEHOLDER_ARN, PLACEHOLDER_VALUE) or not value:
+        # Empty values already carry an annotation from get_ssm_value
+        return
+    if not re.fullmatch(pattern, value):
+        Annotations.of(scope).add_error(
+            f"SSM parameter '{parameter_name}' does not hold {description}."
+        )
 
 
 def replace_ssm_in_config(scope, input_config: dict) -> dict:
