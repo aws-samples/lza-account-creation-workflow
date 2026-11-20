@@ -7,9 +7,8 @@ from aws_cdk import (
     aws_kms as kms,
     aws_lambda as lambda_
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_layer, create_lambda_function
-from app.cdk_helpers.nag_helper import partition_variants
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 
 
 def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
@@ -76,7 +75,7 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
                 ],
                 resources=["*"]
             ))
-        NagSuppressions.add_resource_suppressions(
+        nag_suppress(
             i_sync_ad_group_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
                 "id": "AwsSolutions-IAM5",
@@ -122,7 +121,7 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
             ],
             resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_valid_ad_group_sync_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",
@@ -179,7 +178,7 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
             ],
             resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_attach_permission_set_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",

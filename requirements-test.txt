@@ -10,4 +10,4 @@ msal==1.39.0
 requests_mock==1.12.1
 aws-cdk-lib==2.277.0
 constructs>=10.0.0,<11.0.0
-cdk-nag==2.38.2
+cdk-nag==3.0.2

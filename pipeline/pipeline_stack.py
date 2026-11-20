@@ -10,14 +10,14 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     Tags,
-    Aspects,
     pipelines,
     aws_iam as iam,
     aws_s3 as s3,
+    aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions
 )
-from cdk_nag import NagSuppressions, AwsSolutionsChecks
 from app.cdk_helpers.helper import LZA_SSM_VALUE_PATTERNS, get_ssm_parameter_names
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 from pipeline.pipeline_app_stage import PipelineAppStage
 
 # Days after which server access logs are deleted
@@ -56,7 +56,7 @@ class PipelineStack(cdk.Stack):
             ]
         )
 
-        NagSuppressions.add_resource_suppressions(
+        nag_suppress(
             self.access_log_bucket,
             [
                 {
@@ -151,6 +151,7 @@ class PipelineStack(cdk.Stack):
             self,
             self.construct_prefix + "CodePipeline",
             pipeline_name=pipeline_name,
+            pipeline_type=codepipeline.PipelineType.V2,
             docker_enabled_for_self_mutation=True,
             docker_enabled_for_synth=True,
             enable_key_rotation=True,
@@ -216,24 +217,79 @@ class PipelineStack(cdk.Stack):
         # Server access logs of the artifact bucket go to the access-log bucket
         self.enable_artifact_bucket_access_logs(pipeline_bucket)
 
-        NagSuppressions.add_resource_suppressions(
+        self.acknowledge_pipeline_findings(pipeline)
+
+    def acknowledge_pipeline_findings(self, pipeline: pipelines.CodePipeline) -> None:
+        """
+        Acknowledges the cdk-nag findings on the roles CDK Pipelines creates.
+
+        CDK Pipelines generates these grants for its own roles (pipeline,
+        source action, synth, self-mutation and file asset publishing). cdk-nag
+        3 has no rule-wide acknowledgment, so each wildcard finding is named.
+        The resource findings are built from the pipeline's own constructs so
+        they follow logical ID changes.
+
+        Args:
+            pipeline (pipelines.CodePipeline): The built CDK pipeline.
+        """
+        stack = Stack.of(self)
+
+        def logical_id(construct) -> str:
+            return stack.resolve(stack.get_logical_id(construct.node.default_child))
+
+        artifact_bucket = logical_id(pipeline.pipeline.artifact_bucket)
+        project_ids = [
+            logical_id(pipeline.synth_project),
+            logical_id(pipeline.node.find_child("UpdatePipeline").node.find_child("SelfMutation")),
+        ]
+        codebuild = f"arn:<AWS::Partition>:codebuild:{stack.region}:{stack.account}"
+        logs = f"arn:<AWS::Partition>:logs:{stack.region}:{stack.account}"
+        wildcard_findings = [
+            # Object and key actions CDK Pipelines grants on its artifact bucket and key
+            "Action::s3:Abort*",
+            "Action::s3:DeleteObject*",
+            "Action::s3:GetBucket*",
+            "Action::s3:GetObject*",
+            "Action::s3:List*",
+            "Action::kms:GenerateDataKey*",
+            "Action::kms:ReEncrypt*",
+            f"Resource::<{artifact_bucket}.Arn>/*",
+            # CodeBuild report groups and log groups of the pipeline's projects
+            f"Resource::{codebuild}:report-group/*",
+            f"Resource::{logs}:log-group:/aws/codebuild/*",
+            # Role assumption by self-mutation, and actions with no resource-level scope
+            f"Resource::arn:*:iam::{stack.account}:role/*",
+            "Resource::*",
+        ]
+        for project in project_ids:
+            wildcard_findings.extend([
+                f"Resource::{codebuild}:report-group/<{project}>-*",
+                f"Resource::{logs}:log-group:/aws/codebuild/<{project}>:*",
+            ])
+
+        nag_suppress(
             pipeline,
             [
                 {
                     "id": "AwsSolutions-IAM5",
-                    "reason": "The IAM entity contains wildcard permissions and does not "
-                    "have a cdk-nag rule suppression with evidence for those permission."
+                    "reason": "CDK Pipelines generates these grants for the pipeline, "
+                              "source, synth, self-mutation and asset roles. They are "
+                              "scoped to the pipeline's artifact bucket and key, its "
+                              "CodeBuild projects, and the CDK bootstrap roles.",
+                    "appliesTo": partition_variants(wildcard_findings)
                 },
                 {
                     "id": "AwsSolutions-CB3",
-                    "reason": "The CodeBuild project has privileged mode enabled."
+                    "reason": "Privileged mode is required for Docker-based Lambda "
+                              "asset bundling during synth and self-mutation."
                 },
                 {
                     "id": "AwsSolutions-CB4",
-                    "reason": "The CodeBuild project does not use an AWS KMS key for encryption."
+                    "reason": "The CodeBuild projects use the default AWS managed "
+                              "encryption; the pipeline artifacts are encrypted with "
+                              "the pipeline's KMS key."
                 }
-            ],
-            apply_to_children=True
+            ]
         )
 
     def __init__(self, scope: Construct, construct_id: str, config: dict, **kwargs) -> None:
@@ -262,5 +318,3 @@ class PipelineStack(cdk.Stack):
         tags = json.loads(json.dumps(config["tags"]))
         for key, value in tags.items():
             Tags.of(self).add(key, value)
-
-        Aspects.of(self).add(AwsSolutionsChecks())

@@ -13,8 +13,7 @@ from aws_cdk import (
     aws_logs as logs,
     aws_kms as kms
 )
-from cdk_nag import NagSuppressions
-from app.cdk_helpers.nag_helper import partition_variants
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 
 # Every Lambda function and layer in this solution runs on this runtime.
 LAMBDA_RUNTIME = lambda_.Runtime.PYTHON_3_14
@@ -30,7 +29,7 @@ def suppress_lambda_nag_findings(i_function: lambda_.IFunction, check_runtime: b
         i_function (lambda_.IFunction): The Lambda function.
         check_runtime (bool): Also suppress the latest-runtime check (zip functions only).
     """
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_function.role,
         [{
             "id": "AwsSolutions-IAM4",
@@ -43,7 +42,7 @@ def suppress_lambda_nag_findings(i_function: lambda_.IFunction, check_runtime: b
         }]
     )
     if check_runtime:
-        NagSuppressions.add_resource_suppressions(
+        nag_suppress(
             i_function,
             [{
                 "id": "AwsSolutions-L1",

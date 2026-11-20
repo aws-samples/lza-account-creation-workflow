@@ -34,6 +34,7 @@ test-api-run-*.json
 .workflow-state/
 aidlc/
 AGENTS.md
+PRD.md
 
 # BEGIN AI-DLC:gitignore
 # AI-DLC: local working files

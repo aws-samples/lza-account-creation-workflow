@@ -10,11 +10,90 @@ from aws_cdk import (
     aws_kms as kms,
     aws_lambda as lambda_,
     aws_apigateway as apigw,
-    aws_logs as logs
+    aws_logs as logs,
+    aws_wafv2 as wafv2
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_function
-from app.cdk_helpers.nag_helper import partition_variants
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
+
+# Requests allowed per client IP in any 5-minute window before WAF blocks it
+API_RATE_LIMIT_PER_IP = 1000
+# AWS managed rule groups applied to the API, in priority order
+API_MANAGED_RULE_GROUPS = (
+    "AWSManagedRulesAmazonIpReputationList",
+    "AWSManagedRulesCommonRuleSet",
+    "AWSManagedRulesKnownBadInputsRuleSet",
+)
+
+
+def _visibility(metric_name: str) -> wafv2.CfnWebACL.VisibilityConfigProperty:
+    """Returns the CloudWatch metrics and sampled-request settings of a WAF rule."""
+    return wafv2.CfnWebACL.VisibilityConfigProperty(
+        cloud_watch_metrics_enabled=True,
+        metric_name=metric_name,
+        sampled_requests_enabled=True
+    )
+
+
+def protect_api_with_waf(scope, api: apigw.RestApi) -> wafv2.CfnWebACL:
+    """
+    Creates a regional AWS WAF web ACL and associates it with the API's stage.
+
+    The web ACL applies AWS managed rule groups (IP reputation, common
+    exploits, known bad inputs) and blocks any client IP that sends more
+    than API_RATE_LIMIT_PER_IP requests in five minutes.
+
+    Args:
+        scope (Construct): The CDK construct scope.
+        api (apigw.RestApi): The REST API to protect.
+
+    Returns:
+        wafv2.CfnWebACL: The web ACL.
+    """
+    rules = [
+        wafv2.CfnWebACL.RuleProperty(
+            name=group,
+            priority=priority,
+            override_action=wafv2.CfnWebACL.OverrideActionProperty(none={}),
+            statement=wafv2.CfnWebACL.StatementProperty(
+                managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
+                    vendor_name="AWS",
+                    name=group
+                )
+            ),
+            visibility_config=_visibility(group)
+        )
+        for priority, group in enumerate(API_MANAGED_RULE_GROUPS)
+    ]
+    rules.append(
+        wafv2.CfnWebACL.RuleProperty(
+            name="RateLimitPerIp",
+            priority=len(API_MANAGED_RULE_GROUPS),
+            action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+            statement=wafv2.CfnWebACL.StatementProperty(
+                rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
+                    aggregate_key_type="IP",
+                    limit=API_RATE_LIMIT_PER_IP
+                )
+            ),
+            visibility_config=_visibility("RateLimitPerIp")
+        )
+    )
+
+    web_acl = wafv2.CfnWebACL(
+        scope, "rApiGatewayWebAcl",
+        scope="REGIONAL",
+        default_action=wafv2.CfnWebACL.DefaultActionProperty(allow={}),
+        description="Protects the Account Creation Workflow REST API.",
+        rules=rules,
+        visibility_config=_visibility("AccountCreationApiWebAcl")
+    )
+    wafv2.CfnWebACLAssociation(
+        scope, "rApiGatewayWebAclAssociation",
+        resource_arn=api.deployment_stage.stage_arn,
+        web_acl_arn=web_acl.attr_arn
+    )
+    return web_acl
 
 
 def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
@@ -105,6 +184,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
 
     CfnOutput(scope, "oApiGatewayCreateAccountEndpoint", value=api.url)
 
+    protect_api_with_waf(scope, api)
+
     # Check Name Availability
     i_name_available = create_lambda_function(
         scope=scope,
@@ -135,7 +216,7 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
             ],
             resources=["*"]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_name_available.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",
@@ -267,7 +348,7 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
     )
 
     # Per-resource cdk-nag suppressions for API Gateway
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         api,
         [
             {
@@ -287,12 +368,15 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                 "id": "AwsSolutions-IAM4",
                 "reason": "API Gateway CloudWatch role uses the "
                           "AmazonAPIGatewayPushToCloudWatchLogs managed policy "
-                          "which is the standard approach for API Gateway logging."
+                          "which is the standard approach for API Gateway logging.",
+                "appliesTo": partition_variants([
+                    "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/"
+                    "AmazonAPIGatewayPushToCloudWatchLogs"
+                ])
             }
-        ],
-        apply_to_children=True
+        ]
     )
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_get_exec_status.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",

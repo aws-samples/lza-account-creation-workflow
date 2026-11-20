@@ -7,9 +7,8 @@ from aws_cdk import (
     aws_lambda as lambda_,
     aws_kms as kms
 )
-from cdk_nag import NagSuppressions
 from app.cdk_helpers.lambda_helper import create_lambda_function
-from app.cdk_helpers.nag_helper import partition_variants
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 
 
 def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
@@ -133,7 +132,7 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 ],
                 resources=[lza_pipeline_kms_key_arn]
             ))
-        NagSuppressions.add_resource_suppressions(
+        nag_suppress(
             i_create_account_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
                 "id": "AwsSolutions-IAM5",
@@ -241,7 +240,7 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
             ],
             resources=[f"arn:{partition}:servicecatalog:{region}:{account_id}:*"]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_get_account_status_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",
@@ -322,7 +321,7 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
             ],
             resources=["arn:aws:iam::*:role/AWSControlTowerExecution"]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_create_additional_resources_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",
@@ -444,7 +443,7 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 f"arn:aws:iam::*:role/{lza_validation_role}"
             ]
         ))
-    NagSuppressions.add_resource_suppressions(
+    nag_suppress(
         i_validate_resources_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
             "id": "AwsSolutions-IAM5",

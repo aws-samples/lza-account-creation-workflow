@@ -4,7 +4,6 @@
 from aws_cdk import (
     Stack,
     Tags,
-    Aspects,
     Annotations,
     CfnOutput,
     aws_iam as iam,
@@ -12,13 +11,12 @@ from aws_cdk import (
     aws_events_targets as targets
 )
 from constructs import Construct
-from cdk_nag import AwsSolutionsChecks, NagSuppressions
 from app.cdk_helpers.helper import (
     LZA_SSM_VALUE_PATTERNS, PLACEHOLDER_ARN, PLACEHOLDER_VALUE,
     replace_ssm_in_config, validate_ssm_config_value
 )
 from app.cdk_helpers.kms_helper import create_kms_keys
-from app.cdk_helpers.nag_helper import partition_variants
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 from app.cdk_helpers.sns_helper import create_sns_topic
 from app.cdk_helpers.ses_helper import create_ses_identity
 from app.cdk_helpers.stepfunction_helper import create_stepfunction
@@ -147,7 +145,7 @@ class AccountCreationWorkflowStack(Stack):
                 ],
                 resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
             ))
-        NagSuppressions.add_resource_suppressions(
+        nag_suppress(
             i_account_tag_ssm_parameter_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
                 "id": "AwsSolutions-IAM5",
@@ -246,5 +244,3 @@ class AccountCreationWorkflowStack(Stack):
         # Add tags to all resources created
         for key, value in config['tags'].items():
             Tags.of(self).add(key, value)
-
-        Aspects.of(self).add(AwsSolutionsChecks())

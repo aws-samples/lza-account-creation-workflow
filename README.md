@@ -337,6 +337,11 @@ For this example, S3 Bucket Access Logging is enabled on the pipeline source and
 
 ### Invoking the AWS Step Function using API Gateway (awscurl)
 
+- The API stage is protected by a regional AWS WAF web ACL with the AWS
+  managed IP reputation, common rule set and known bad inputs rule groups,
+  plus a limit of 1,000 requests per client IP in any five minutes. The web
+  ACL adds a monthly WAF charge (web ACL, rules and requests).
+
 - The examples below use [awscurl](https://docs.aws.amazon.com/prometheus/latest/userguide/AMP-compatible-APIs.html).
 
 - Retrieve the API Gateway Endpoint from the _lza-account-creation-workflow-application_ CloudFormation output.

@@ -24,6 +24,7 @@ import aws_cdk as cdk
 from aws_cdk.assertions import Annotations, Match, Template
 
 from app.app_stack import AccountCreationWorkflowStack
+from app.cdk_helpers.nag_helper import enable_nag_checks
 from pipeline.pipeline_stack import PipelineStack
 
 ROOT = Path(__file__).parents[2]
@@ -265,12 +266,37 @@ def test_missing_config_key_adds_error():
     )
 
 
-def test_app_stack_has_no_unsuppressed_cdk_nag_errors(app_stack):
-    """cdk-nag AwsSolutionsChecks reports no unsuppressed error."""
-    errors = Annotations.from_stack(app_stack).find_error(
-        "*", Match.string_like_regexp("AwsSolutions-.*")
+def _unacknowledged_nag_findings(app: cdk.App) -> list:
+    """Synthesizes the app with cdk-nag and returns the unacknowledged findings.
+
+    cdk-nag 3 fails synth with a validation report when a finding is not
+    acknowledged. The report lists each finding's rule and construct path.
+    """
+    enable_nag_checks(app)
+    try:
+        app.synth()
+    except RuntimeError as err:
+        match = re.search(r"found in: (\S+validation-report\.json)", str(err))
+        if not match:
+            raise
+        with open(match.group(1), encoding="utf-8") as report_file:
+            report = json.load(report_file)
+        return [
+            f"{violation.get('ruleName')} at {location.get('constructPath')}"
+            for plugin in report.get("pluginReports", [])
+            for violation in plugin.get("violations", [])
+            for location in violation.get("violatingConstructs", [])
+        ] or [str(err)]
+    return []
+
+
+def test_app_stack_has_no_unsuppressed_cdk_nag_errors():
+    """cdk-nag AwsSolutionsChecks reports no unacknowledged finding."""
+    app = _app()
+    AccountCreationWorkflowStack(
+        app, "AppStackNag", config=_load_config(), env=_env()
     )
-    assert not errors
+    assert not _unacknowledged_nag_findings(app)
 
 
 # FR8.3 / FR8.4
@@ -389,16 +415,50 @@ def test_synth_role_reads_only_the_two_ssm_parameters(pipeline_template):
         assert [res for res in resources if tail + '"' in res]
 
 
+def test_api_stage_is_protected_by_waf(app_template):
+    """A regional web ACL with managed rules and a rate limit protects the API stage."""
+    web_acls = app_template.find_resources("AWS::WAFv2::WebACL")
+    assert len(web_acls) == 1
+    web_acl_id, web_acl = next(iter(web_acls.items()))
+    properties = web_acl["Properties"]
+    assert properties["Scope"] == "REGIONAL"
+    assert properties["DefaultAction"] == {"Allow": {}}
+    managed = {
+        rule["Statement"]["ManagedRuleGroupStatement"]["Name"]
+        for rule in properties["Rules"]
+        if "ManagedRuleGroupStatement" in rule["Statement"]
+    }
+    assert managed == {
+        "AWSManagedRulesAmazonIpReputationList",
+        "AWSManagedRulesCommonRuleSet",
+        "AWSManagedRulesKnownBadInputsRuleSet",
+    }
+    rate_rules = [
+        rule for rule in properties["Rules"]
+        if "RateBasedStatement" in rule["Statement"]
+    ]
+    assert len(rate_rules) == 1
+    assert rate_rules[0]["Action"] == {"Block": {}}
+    app_template.has_resource_properties(
+        "AWS::WAFv2::WebACLAssociation",
+        {"WebACLArn": {"Fn::GetAtt": [web_acl_id, "Arn"]}},
+    )
+
+
+def test_pipeline_uses_v2_type(pipeline_template):
+    """The CodePipeline uses the V2 pipeline type."""
+    pipeline_template.has_resource_properties(
+        "AWS::CodePipeline::Pipeline", {"PipelineType": "V2"}
+    )
+
+
 def test_pipeline_stack_has_no_unsuppressed_cdk_nag_errors():
-    """cdk-nag reports no unsuppressed error on the pipeline stack."""
+    """cdk-nag reports no unacknowledged finding on the pipeline stack."""
     app = _app()
-    stack = PipelineStack(
+    PipelineStack(
         app, "PipelineStackNag", config=_load_config(), env=_env()
     )
-    errors = Annotations.from_stack(stack).find_error(
-        "*", Match.string_like_regexp("AwsSolutions-.*")
-    )
-    assert not errors
+    assert not _unacknowledged_nag_findings(app)
 
 
 # FR5: removed config-log role

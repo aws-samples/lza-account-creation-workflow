@@ -67,16 +67,23 @@ cfn-guard validate -r iam_no_inline_policy_check.guard -d dependencies
 The rule is in the
 [aws-guard-rules-registry](https://github.com/aws-cloudformation/aws-guard-rules-registry/blob/main/rules/aws/iam/iam_no_inline_policy_check.guard).
 
-## cdk-nag suppressions
+## cdk-nag
 
-Write cdk-nag `appliesTo` entries that name a partition through
-`partition_variants` in `app/cdk_helpers/nag_helper.py`. `cdk.json` sets
-`@aws-cdk/core:enablePartitionLiterals`, so synthesized ARNs contain the
-literal partition, and an entry that only uses `<AWS::Partition>` does not
-match.
+`app.py` turns on cdk-nag `AwsSolutionsChecks` once, for the whole app, with
+`enable_nag_checks` from `app/cdk_helpers/nag_helper.py`. cdk-nag 3 is a CDK
+policy validation plugin: `cdk synth` fails with a validation report when a
+finding is not acknowledged.
 
-The project stays on cdk-nag 2.x. cdk-nag 3 removes `NagSuppressions`, which
-every suppression here uses.
+Acknowledge findings with `nag_suppress(construct, [...])` from the same
+module. It takes a list of `{"id", "reason", "appliesTo"}` entries and covers
+the construct and everything under it. cdk-nag 3 has no rule-wide
+acknowledgment, so a rule that reports several findings (IAM4, IAM5) needs an
+`appliesTo` entry for each finding.
+
+Write `appliesTo` entries that name a partition through `partition_variants`.
+`cdk.json` sets `@aws-cdk/core:enablePartitionLiterals`, so synthesized ARNs
+contain the literal partition, and an entry that only uses `<AWS::Partition>`
+does not match.
 
 ## Synth
 

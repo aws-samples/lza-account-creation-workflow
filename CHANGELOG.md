@@ -31,11 +31,19 @@
 
 ### Changed
 
+- Move to cdk-nag 3. Checks run once for the whole app (`app.py`), and
+  suppressions use CDK's `Validations.acknowledge()` through
+  `nag_suppress()`. The blanket IAM5 suppression on the CDK Pipelines roles
+  is replaced by one acknowledgment per finding.
+- Switch the deployment pipeline to the CodePipeline V2 type.
+- Protect the API Gateway stage with a regional AWS WAF web ACL (AWS managed
+  rule groups and a per-IP rate limit). This resolves the cdk-nag APIG3
+  warning.
 - Move every Lambda function and layer from Python 3.12 to Python 3.14, with
   the matching SAM build image
   (`public.ecr.aws/sam/build-python3.14:1.174.0-20261120044557`). The
   runtime and image are set once in `app/cdk_helpers/lambda_helper.py`.
-- Update Python dependencies: aws-cdk-lib 2.277.0, cdk-nag 2.38.2,
+- Update Python dependencies: aws-cdk-lib 2.277.0, cdk-nag 3.0.2,
   boto3 1.44.7, PyYAML 6.0.3, requests 2.34.2, msal 1.39.0, PyGithub 2.10.0,
   urllib3 2.8.0, moto 5.2.5, pytest 9.2.0, pytest-cov 7.1.0 and tox 4.67.15.
   `pip-audit` reports no known vulnerabilities for the pinned set.
