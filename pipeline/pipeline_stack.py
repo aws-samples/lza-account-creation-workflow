@@ -42,7 +42,7 @@ class PipelineStack(cdk.Stack):
         """
         self.access_log_bucket = s3.Bucket(
             self,
-            self.construct_prefix+"AccessLogsS3Bucket",
+            self.construct_prefix + "AccessLogsS3Bucket",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
@@ -83,7 +83,7 @@ class PipelineStack(cdk.Stack):
         src_bucket_name = f"{config['deployInfrastructure']['codepipeline']['sourceBucketPrefix']}-{region}-{account}"
         self.source_bucket = s3.Bucket(
             self,
-            self.construct_prefix+"SourceS3Bucket",
+            self.construct_prefix + "SourceS3Bucket",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             bucket_name=src_bucket_name,
@@ -127,8 +127,8 @@ class PipelineStack(cdk.Stack):
 
         Args:
             config (dict): The application configuration.
-            
-        The pipeline includes the source, build, and deployment stages, along with 
+
+        The pipeline includes the source, build, and deployment stages, along with
         necessary resources such as S3 buckets and IAM roles.
         """
         # Get current stack name
@@ -149,7 +149,7 @@ class PipelineStack(cdk.Stack):
         )
         pipeline = pipelines.CodePipeline(
             self,
-            self.construct_prefix+"CodePipeline",
+            self.construct_prefix + "CodePipeline",
             pipeline_name=pipeline_name,
             docker_enabled_for_self_mutation=True,
             docker_enabled_for_synth=True,
@@ -221,8 +221,8 @@ class PipelineStack(cdk.Stack):
             [
                 {
                     "id": "AwsSolutions-IAM5",
-                    "reason": "The IAM entity contains wildcard permissions and does not " \
-                        "have a cdk-nag rule suppression with evidence for those permission."
+                    "reason": "The IAM entity contains wildcard permissions and does not "
+                    "have a cdk-nag rule suppression with evidence for those permission."
                 },
                 {
                     "id": "AwsSolutions-CB3",

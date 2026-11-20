@@ -185,7 +185,7 @@ def update_account_config_file(
     path_to_file: str, account_info: dict, force_update: bool = False
 ) -> None:
     """Update LZA account config file with account info if not already present
-    
+
 
     Args:
         path_to_file (str): Path to the account-config.yaml file to update
@@ -247,7 +247,7 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
 
     Returns:
         None
-        
+
     Raises:
         MissingOrganizationalUnitConfigException: If OU not found
     """
@@ -266,7 +266,7 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
 
 def build_root_email_address(account_name: str) -> str:
     """Build the root email address from prefix and domain
-    
+
     Args:
         account_name (str): The name of the account being created
 
@@ -275,8 +275,8 @@ def build_root_email_address(account_name: str) -> str:
 
     Raises:
        MissingEnvironmentVariableException: If the prefix or domain environment vars are missing
-        
-    Builds root email from env vars and account name. Removes spaces 
+
+    Builds root email from env vars and account name. Removes spaces
         and special characters.
     """
     try:
@@ -322,7 +322,7 @@ def get_pipeline_s3_src_config(client: object, pipeline_name='AWSAccelerator-Pip
     Args:
         client (object): An AWS SDK client object with permissions to call the
                          get_pipeline API. This is typically a boto3 CodePipeline client.
-        pipeline_name (str, optional): The name of the pipeline to query. 
+        pipeline_name (str, optional): The name of the pipeline to query.
                                        Defaults to 'AWSAccelerator-Pipeline'.
 
     Returns:

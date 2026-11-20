@@ -13,7 +13,7 @@ from app.cdk_helpers.nag_helper import partition_variants
 
 
 def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
-                      lambda_key: kms.IKey) -> dict:
+                               lambda_key: kms.IKey) -> dict:
     """
     Sets up Lambda functions for Azure AD integration.
 
@@ -59,21 +59,23 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
         )
         i_sync_ad_group_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-                "secretsmanager:ListSecretVersionIds"
-            ],
-            resources=[f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:{config['appInfrastructure']['graphApiSecretName']}-*"]
-        ))
+                actions=[
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:ListSecretVersionIds"
+                ],
+                resources=[
+                    f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:{
+                        config['appInfrastructure']['graphApiSecretName']}-*"]
+            ))
         i_sync_ad_group_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "secretsmanager:ListSecrets"
-            ],
-            resources=["*"]
-        ))
+                actions=[
+                    "secretsmanager:ListSecrets"
+                ],
+                resources=["*"]
+            ))
         NagSuppressions.add_resource_suppressions(
             i_sync_ad_group_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
@@ -83,7 +85,8 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
                           "actions are scoped to the GraphApiSecret ARN pattern.",
                 "appliesTo": partition_variants([
                     "Resource::*",
-                    f"Resource::arn:<AWS::Partition>:secretsmanager:{region}:{account_id}:secret:{config['appInfrastructure']['graphApiSecretName']}-*"
+                    f"Resource::arn:<AWS::Partition>:secretsmanager:{region}:{account_id}:secret:{
+                        config['appInfrastructure']['graphApiSecretName']}-*"
                 ])
             }]
         )
@@ -107,18 +110,18 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
     )
     i_valid_ad_group_sync_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sso:ListInstances"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "sso:ListInstances"
+            ],
+            resources=["*"]
+        ))
     i_valid_ad_group_sync_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "identitystore:ListGroups"
-        ],
-        resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
-    ))
+            actions=[
+                "identitystore:ListGroups"
+            ],
+            resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_valid_ad_group_sync_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
@@ -152,30 +155,30 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
     )
     i_attach_permission_set_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sso:ListInstances",
-            "sso:ListPermissionSets",
-            "sso:DescribePermissionSet"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "sso:ListInstances",
+                "sso:ListPermissionSets",
+                "sso:DescribePermissionSet"
+            ],
+            resources=["*"]
+        ))
     i_attach_permission_set_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sso:CreateAccountAssignment"
-        ],
-        resources=[
-            f"arn:{partition}:sso:::{account_id}:permissionSet/*/*",
-            f"arn:{partition}:sso:::{account_id}:account/*"
-        ]
-    ))
+            actions=[
+                "sso:CreateAccountAssignment"
+            ],
+            resources=[
+                f"arn:{partition}:sso:::{account_id}:permissionSet/*/*",
+                f"arn:{partition}:sso:::{account_id}:account/*"
+            ]
+        ))
     i_attach_permission_set_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "identitystore:ListGroups"
-        ],
-        resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
-    ))
+            actions=[
+                "identitystore:ListGroups"
+            ],
+            resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_attach_permission_set_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{

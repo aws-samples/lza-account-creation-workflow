@@ -48,7 +48,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         scope=scope,
         function_name='CheckForRunningProcesses',
         function_path='stepfunction',
-        description='This function will ensure there are no running processes before proceeding to create an AWS Account.',
+        description='This function will ensure there are no running processes before proceeding '
+                    'to create an AWS Account.',
         layers=[boto3_layer, account_creation_layer],
         timeout=120,
         key=lambda_key,
@@ -59,23 +60,27 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     )
     i_check_for_running_proc_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codebuild:ListBuildsForProject",
-            "codebuild:BatchGetBuilds"
-        ],
-        resources=[f"arn:{partition}:codebuild:{region}:{account_id}:project/{config['appInfrastructure']['accountDecommissionProject']}"]
-    ))
+            actions=[
+                "codebuild:ListBuildsForProject",
+                "codebuild:BatchGetBuilds"
+            ],
+            resources=[
+                f"arn:{partition}:codebuild:{region}:{account_id}:project/"
+                f"{config['appInfrastructure']['accountDecommissionProject']}"]
+        ))
     i_check_for_running_proc_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codepipeline:GetPipeline",
-            "codepipeline:GetPipelineState",
-            "codepipeline:GetPipelineExecution",
-            "codepipeline:ListPipelines",
-            "codepipeline:ListPipelineExecutions"
-        ],
-        resources=[f"arn:{partition}:codepipeline:{region}:{account_id}:{config['appInfrastructure']['lzaPipelineName']}"]
-    ))
+            actions=[
+                "codepipeline:GetPipeline",
+                "codepipeline:GetPipelineState",
+                "codepipeline:GetPipelineExecution",
+                "codepipeline:ListPipelines",
+                "codepipeline:ListPipelineExecutions"
+            ],
+            resources=[
+                f"arn:{partition}:codepipeline:{region}:{account_id}:{
+                    config['appInfrastructure']['lzaPipelineName']}"]
+        ))
     _sfn_lambdas.update({"CheckForRunningProcessesFunctionArn": i_check_for_running_proc_fn.function_arn})
 
     # CREATE ACCOUNT
@@ -91,7 +96,7 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
             function_name='CreateAccountS3',
             function_path='stepfunction',
             description='This function will update the LZA account-config.yaml which will create an AWS Service '
-                'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
+            'Catalog Provisioned Product for Account Vending Machine which creates an account within Control Tower.',
             layers=[account_creation_layer],
             timeout=900,
             key=lambda_key,
@@ -105,29 +110,29 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         )
         i_create_account_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "s3:ListBucket"
-            ],
-            resources=[f"arn:{partition}:s3:::{lza_config_bucket}"]
-        ))
+                actions=[
+                    "s3:ListBucket"
+                ],
+                resources=[f"arn:{partition}:s3:::{lza_config_bucket}"]
+            ))
         i_create_account_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "s3:GetObject",
-                "s3:PutObject"
-            ],
-            resources=[f"arn:{partition}:s3:::{lza_config_bucket}/*"]
-        ))
+                actions=[
+                    "s3:GetObject",
+                    "s3:PutObject"
+                ],
+                resources=[f"arn:{partition}:s3:::{lza_config_bucket}/*"]
+            ))
         # KMS permissions for the LZA pipeline S3 bucket encryption key
         i_create_account_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-            ],
-            resources=[lza_pipeline_kms_key_arn]
-        ))
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                ],
+                resources=[lza_pipeline_kms_key_arn]
+            ))
         NagSuppressions.add_resource_suppressions(
             i_create_account_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
@@ -165,24 +170,26 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         )
         i_create_account_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "secretsmanager:GetSecretValue"
-            ],
-            resources=[f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:{github_secret_name}-*"]
-        ))
+                actions=[
+                    "secretsmanager:GetSecretValue"
+                ],
+                resources=[f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:{github_secret_name}-*"]
+            ))
 
     i_create_account_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codepipeline:StartPipelineExecution",
-            "codepipeline:GetPipeline",
-            "codepipeline:GetPipelineState",
-            "codepipeline:GetPipelineExecution",
-            "codepipeline:ListPipelines",
-            "codepipeline:ListPipelineExecutions"
-        ],
-        resources=[f"arn:{partition}:codepipeline:{region}:{account_id}:{config['appInfrastructure']['lzaPipelineName']}"]
-    ))
+            actions=[
+                "codepipeline:StartPipelineExecution",
+                "codepipeline:GetPipeline",
+                "codepipeline:GetPipelineState",
+                "codepipeline:GetPipelineExecution",
+                "codepipeline:ListPipelines",
+                "codepipeline:ListPipelineExecutions"
+            ],
+            resources=[
+                f"arn:{partition}:codepipeline:{region}:{account_id}:{
+                    config['appInfrastructure']['lzaPipelineName']}"]
+        ))
     _sfn_lambdas.update({"CreateAccountFunctionArn": i_create_account_fn.function_arn})
 
     # GET ACCOUNT STATUS
@@ -208,31 +215,32 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     lza_codebuild_projects_arn = f"arn:{partition}:codebuild:{region}:{account_id}:project/{lza_project_prefix}*"
     i_get_account_status_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codebuild:BatchGetBuilds"
-        ],
-        resources=[
-            f"arn:{partition}:codebuild:{region}:{account_id}:project/{config['appInfrastructure']['accountDecommissionProject']}",
-            lza_codebuild_projects_arn
-        ]
-    ))
+            actions=[
+                "codebuild:BatchGetBuilds"
+            ],
+            resources=[
+                f"arn:{partition}:codebuild:{region}:{account_id}:project/{
+                    config['appInfrastructure']['accountDecommissionProject']}",
+                lza_codebuild_projects_arn
+            ]
+        ))
     i_get_account_status_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "servicecatalog:ScanProvisionedProducts",
-            "servicecatalog:SearchProducts",
-            "servicecatalog:ListPortfolios",
-            "servicecatalog:ListTagsForResource",
-            "servicecatalog:ListApplications",
-            "servicecatalog:DescribePortfolioShares",
-            "servicecatalog:DescribeProduct",
-            "servicecatalog:DescribePortfolio",
-            "servicecatalog:DescribeProvisionedProduct",
-            "servicecatalog:DescribeProvisioningArtifact",
-            "servicecatalog:SearchProvisionedProducts"
-        ],
-        resources=[f"arn:{partition}:servicecatalog:{region}:{account_id}:*"]
-    ))
+            actions=[
+                "servicecatalog:ScanProvisionedProducts",
+                "servicecatalog:SearchProducts",
+                "servicecatalog:ListPortfolios",
+                "servicecatalog:ListTagsForResource",
+                "servicecatalog:ListApplications",
+                "servicecatalog:DescribePortfolioShares",
+                "servicecatalog:DescribeProduct",
+                "servicecatalog:DescribePortfolio",
+                "servicecatalog:DescribeProvisionedProduct",
+                "servicecatalog:DescribeProvisioningArtifact",
+                "servicecatalog:SearchProvisionedProducts"
+            ],
+            resources=[f"arn:{partition}:servicecatalog:{region}:{account_id}:*"]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_get_account_status_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
@@ -250,16 +258,18 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     )
     i_get_account_status_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codepipeline:GetPipeline",
-            "codepipeline:GetPipelineState",
-            "codepipeline:GetPipelineExecution",
-            "codepipeline:ListPipelines",
-            "codepipeline:ListPipelineExecutions",
-            "codepipeline:ListActionExecutions"
-        ],
-        resources=[f"arn:{partition}:codepipeline:{region}:{account_id}:{config['appInfrastructure']['lzaPipelineName']}"]
-    ))
+            actions=[
+                "codepipeline:GetPipeline",
+                "codepipeline:GetPipelineState",
+                "codepipeline:GetPipelineExecution",
+                "codepipeline:ListPipelines",
+                "codepipeline:ListPipelineExecutions",
+                "codepipeline:ListActionExecutions"
+            ],
+            resources=[
+                f"arn:{partition}:codepipeline:{region}:{account_id}:{
+                    config['appInfrastructure']['lzaPipelineName']}"]
+        ))
     _sfn_lambdas.update({"GetAccountStatusFunctionArn": i_get_account_status_fn.function_arn})
 
     # CREATE ADDITIONAL RESOURCES
@@ -278,40 +288,40 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     )
     i_create_additional_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "iam:CreateAccountAlias"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "iam:CreateAccountAlias"
+            ],
+            resources=["*"]
+        ))
     i_create_additional_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:ListTagsForResource",
-            "organizations:TagResource",
-            "organizations:UntagResource"
-        ],
-        resources=[
-            f"arn:{partition}:organizations::{account_id}:account/o-*/*",
-            f"arn:{partition}:organizations::{account_id}:ou/o-*/ou-*",
-            f"arn:{partition}:organizations::{account_id}:root/o-*/r-*"
-        ]
-    ))
+            actions=[
+                "organizations:ListTagsForResource",
+                "organizations:TagResource",
+                "organizations:UntagResource"
+            ],
+            resources=[
+                f"arn:{partition}:organizations::{account_id}:account/o-*/*",
+                f"arn:{partition}:organizations::{account_id}:ou/o-*/ou-*",
+                f"arn:{partition}:organizations::{account_id}:root/o-*/r-*"
+            ]
+        ))
     i_create_additional_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "tag:GetResources",
-            "tag:GetTagKeys",
-            "tag:GetTagValues"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "tag:GetResources",
+                "tag:GetTagKeys",
+                "tag:GetTagValues"
+            ],
+            resources=["*"]
+        ))
     i_create_additional_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sts:AssumeRole"
-        ],
-        resources=["arn:aws:iam::*:role/AWSControlTowerExecution"]
-    ))
+            actions=[
+                "sts:AssumeRole"
+            ],
+            resources=["arn:aws:iam::*:role/AWSControlTowerExecution"]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_create_additional_resources_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
@@ -357,81 +367,83 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     )
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:DescribeOrganization",
-            "organizations:DescribeAccount",
-            "organizations:ListAccounts",
-            "organizations:ListTagsForResource",
-            "organizations:ListRoots",
-            "organizations:ListChildren",
-            "organizations:ListOrganizationalUnitsForParent"
-        ],
-        resources=[
-            f"arn:{partition}:organizations::{account_id}:account/o-*/*",
-            f"arn:{partition}:organizations::{account_id}:ou/o-*/ou-*",
-            f"arn:{partition}:organizations::{account_id}:root/o-*/r-*",
-            f"arn:{partition}:organizations::{account_id}:organization/o-*"
-        ]
-    ))
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:DescribeAccount",
+                "organizations:ListAccounts",
+                "organizations:ListTagsForResource",
+                "organizations:ListRoots",
+                "organizations:ListChildren",
+                "organizations:ListOrganizationalUnitsForParent"
+            ],
+            resources=[
+                f"arn:{partition}:organizations::{account_id}:account/o-*/*",
+                f"arn:{partition}:organizations::{account_id}:ou/o-*/ou-*",
+                f"arn:{partition}:organizations::{account_id}:root/o-*/r-*",
+                f"arn:{partition}:organizations::{account_id}:organization/o-*"
+            ]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:DescribeOrganization",
-            "organizations:ListAccounts"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:ListAccounts"
+            ],
+            resources=["*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "ssm:GetParameters"
-        ],
-        resources=[f"arn:{partition}:ssm:{region}:{account_id}:parameter/core-accounts/*"]
-    ))
+            actions=[
+                "ssm:GetParameters"
+            ],
+            resources=[f"arn:{partition}:ssm:{region}:{account_id}:parameter/core-accounts/*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "identitystore:GetUserId"
-        ],
-        resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
-    ))
+            actions=[
+                "identitystore:GetUserId"
+            ],
+            resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codepipeline:ListActionExecutions"
-        ],
-        resources=[f"arn:{partition}:codepipeline:{region}:{account_id}:{config['appInfrastructure']['lzaPipelineName']}"]
-    ))
+            actions=[
+                "codepipeline:ListActionExecutions"
+            ],
+            resources=[
+                f"arn:{partition}:codepipeline:{region}:{account_id}:{
+                    config['appInfrastructure']['lzaPipelineName']}"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "codebuild:BatchGetBuilds"
-        ],
-        resources=[f"arn:{partition}:codebuild:{region}:{account_id}:project/*"]
-    ))
+            actions=[
+                "codebuild:BatchGetBuilds"
+            ],
+            resources=[f"arn:{partition}:codebuild:{region}:{account_id}:project/*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "logs:GetLogEvents"
-        ],
-        resources=[f"arn:{partition}:logs:{region}:{account_id}:log-group:*:log-stream:*"]
-    ))
+            actions=[
+                "logs:GetLogEvents"
+            ],
+            resources=[f"arn:{partition}:logs:{region}:{account_id}:log-group:*:log-stream:*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "states:GetExecutionHistory"
-        ],
-        resources=[f"arn:{partition}:states:{region}:{account_id}:execution:*:*"]
-    ))
+            actions=[
+                "states:GetExecutionHistory"
+            ],
+            resources=[f"arn:{partition}:states:{region}:{account_id}:execution:*:*"]
+        ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sts:AssumeRole"
-        ],
-        resources=[
-            f"arn:aws:iam::*:role/{lza_validation_role}"
-        ]
-    ))
+            actions=[
+                "sts:AssumeRole"
+            ],
+            resources=[
+                f"arn:aws:iam::*:role/{lza_validation_role}"
+            ]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_validate_resources_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
@@ -478,19 +490,19 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
     )
     i_return_response_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sns:Publish"
-        ],
-        resources=[account_creation_failure_sns_arn]
-    ))
+            actions=[
+                "sns:Publish"
+            ],
+            resources=[account_creation_failure_sns_arn]
+        ))
     i_return_response_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "kms:GenerateDataKey",
-            "kms:Decrypt"
-        ],
-        resources=[sns_key.key_arn]
-    ))
+            actions=[
+                "kms:GenerateDataKey",
+                "kms:Decrypt"
+            ],
+            resources=[sns_key.key_arn]
+        ))
     _sfn_lambdas.update({"ReturnResponseFunctionArn": i_return_response_fn.function_arn})
 
     # SEND EMAIL WITH SES
@@ -503,17 +515,18 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
-            "SES_IDENTITY_ARN": f"arn:{partition}:ses:{region}:{account_id}:identity/{account_creation_email_ses_identity}",
+            "SES_IDENTITY_ARN": f"arn:{partition}:ses:{region}:{account_id}:identity/"
+                                f"{account_creation_email_ses_identity}",
             "FROM_EMAIL_ADDRESS": account_creation_email_ses_identity
         }
     )
     i_send_email_ses_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "ses:SendEmail"
-        ],
-        resources=[f"arn:{partition}:ses:{region}:{account_id}:identity/{account_creation_email_ses_identity}"]
-    ))
+            actions=[
+                "ses:SendEmail"
+            ],
+            resources=[f"arn:{partition}:ses:{region}:{account_id}:identity/{account_creation_email_ses_identity}"]
+        ))
     _sfn_lambdas.update({"SendEmailWithSESFunctionArn": i_send_email_ses_fn.function_arn})
 
     return _sfn_lambdas

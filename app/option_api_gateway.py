@@ -24,15 +24,15 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
 
     Parameters:
         scope (Construct): The construct scope.
-        config (dict): The configuration dictionary. 
+        config (dict): The configuration dictionary.
         boto3_layer (ILayerVersion): The Lambda layer for AWS SDK.
         lambda_key (IKey): The KMS key for encrypting Lambda function code.
-    
+
     Returns:
         None
 
-    This function creates the necessary API Gateway resources like REST API, 
-    resources, methods etc to support the account creation workflow. It also 
+    This function creates the necessary API Gateway resources like REST API,
+    resources, methods etc to support the account creation workflow. It also
     sets up Lambda functions and integrates them with API Gateway.
     """
     # Set variables
@@ -55,17 +55,17 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
     account_info = api_gateway.get_account()
 
     # API Gateway Configurations
-    api_deploy_options=apigw.StageOptions(
+    api_deploy_options = apigw.StageOptions(
         access_log_destination=apigw.LogGroupLogDestination(log_group),
         access_log_format=apigw.AccessLogFormat.clf(),
         logging_level=apigw.MethodLoggingLevel.INFO,
         data_trace_enabled=True
     )
 
-    api_endpoint_configuration=apigw.EndpointConfiguration(
+    api_endpoint_configuration = apigw.EndpointConfiguration(
         types=[apigw.EndpointType.EDGE]
     )
- 
+
     api_iam_policy = iam.PolicyDocument(
         statements=[
             iam.PolicyStatement(
@@ -120,21 +120,21 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
     )
     i_name_available.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:DescribeOrganization",
-            "organizations:DescribeAccount",
-            "organizations:ListAccounts"
-        ],
-        resources=[f"arn:{partition}:organizations::{account_id}:account/o-*/*"]
-    ))
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:DescribeAccount",
+                "organizations:ListAccounts"
+            ],
+            resources=[f"arn:{partition}:organizations::{account_id}:account/o-*/*"]
+        ))
     i_name_available.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:DescribeOrganization",
-            "organizations:ListAccounts"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:ListAccounts"
+            ],
+            resources=["*"]
+        ))
     NagSuppressions.add_resource_suppressions(
         i_name_available.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
         [{
@@ -174,15 +174,17 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
     )
     i_run_stepfunction.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "states:ListExecutions",
-            "states:DescribeExecution",
-            "states:DescribeStateMachine",
-            "states:StartExecution"
-        ],
-        resources=[f"arn:{partition}:states:{region}:{account_id}:stateMachine:{config['appInfrastructure']['stepFunctionName']}"]
-    ))
- 
+            actions=[
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:DescribeStateMachine",
+                "states:StartExecution"
+            ],
+            resources=[
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:{
+                    config['appInfrastructure']['stepFunctionName']}"]
+        ))
+
     api_model = api.add_model(
         "rApiGatewayModel",
         content_type="application/json",
@@ -208,9 +210,9 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
     )
 
     api_validator = api.add_request_validator(
-       "rApiGatewayRequestValidator",
-       request_validator_name="AccountCreationRequestValidator",
-       validate_request_body=True
+        "rApiGatewayRequestValidator",
+        request_validator_name="AccountCreationRequestValidator",
+        validate_request_body=True
     )
 
     # Sets up /execute to be the endpoint
@@ -235,23 +237,26 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
-            "SF_EXECUTION_ARN_BASE": f"arn:{partition}:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}"
+            "SF_EXECUTION_ARN_BASE": f"arn:{partition}:states:{region}:{account_id}:execution:"
+                                     f"{config['appInfrastructure']['stepFunctionName']}"
         }
     )
     i_get_exec_status.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "states:ListExecutions",
-            "states:DescribeExecution",
-            "states:DescribeStateMachine",
-            "states:StartExecution",
-            "states:GetExecutionHistory"
-        ],
-        resources=[
-            f"arn:{partition}:states:{region}:{account_id}:stateMachine:{config['appInfrastructure']['stepFunctionName']}",
-            f"arn:{partition}:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}:*"
-        ]
-    ))
+            actions=[
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:DescribeStateMachine",
+                "states:StartExecution",
+                "states:GetExecutionHistory"
+            ],
+            resources=[
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:{
+                    config['appInfrastructure']['stepFunctionName']}",
+                f"arn:{partition}:states:{region}:{account_id}:execution:{
+                    config['appInfrastructure']['stepFunctionName']}:*"
+            ]
+        ))
 
     execute = api.root.add_resource("get_execution_status")
     execute.add_method(
@@ -295,7 +300,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                       "step function. Execution names are dynamic. Scoped to "
                       "specific state machine name with wildcard execution ID.",
             "appliesTo": partition_variants([
-                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}:*"
+                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:{
+                    config['appInfrastructure']['stepFunctionName']}:*"
             ])
         }]
     )
@@ -315,7 +321,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                         resources=[
                             f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/GET/check_name",
                             f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/POST/execute",
-                            f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/GET/get_execution_status"
+                            f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}"
+                            "/prod/GET/get_execution_status"
                         ]
                     )]
                 )

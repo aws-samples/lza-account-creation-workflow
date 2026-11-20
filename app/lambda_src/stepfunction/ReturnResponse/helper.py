@@ -22,7 +22,7 @@ def send_sns_message(error: str, account_name='test', topic=os.getenv('SNS_FAILU
 
     Args:
         error (str): The error message text
-        account_name (str): The account name (default: 'test') 
+        account_name (str): The account name (default: 'test')
         topic (str): The SNS topic ARN (default: env var)
 
     Returns:

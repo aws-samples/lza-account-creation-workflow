@@ -34,7 +34,7 @@ class ValidateS3:
         """
         Checks if an S3 bucket exists.
 
-        Args: 
+        Args:
             bucket_name (str): Name of the bucket
 
         Returns:

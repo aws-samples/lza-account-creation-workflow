@@ -58,11 +58,11 @@ def create_lambda_layer(scope, layer_name: str, description: str = None) -> lamb
         layer_name: The name of the layer.
         description: An optional description of the layer.
 
-    Returns: 
+    Returns:
         lambda_.ILayerVersion: The Lambda layer version object.
     """
     layer = lambda_.LayerVersion(
-        scope, f"rLambdaLayer{layer_name.title().replace('_','')}",
+        scope, f"rLambdaLayer{layer_name.title().replace('_', '')}",
         layer_version_name=layer_name,
         removal_policy=RemovalPolicy.RETAIN,
         code=lambda_.Code.from_asset(
@@ -112,7 +112,7 @@ def create_lambda_function(scope, function_name: str, function_path: str,
     Creates an AWS Lambda function.
 
     Args:
-        scope (Construct): The CDK construct scope in which to define this function. 
+        scope (Construct): The CDK construct scope in which to define this function.
         function_name (str): The name of the Lambda function.
         function_path (str): The path to the Lambda function code.
         key (kms.IKey): The KMS key to encrypt environment variables.
@@ -179,7 +179,7 @@ def create_lambda_docker_function(scope, function_name: str, function_path: str,
 
     Returns:
         lambda_.IFunction: The Lambda function object.
-    """    
+    """
     i_function = lambda_.DockerImageFunction(
         scope, f"rLambdaFunction{function_name}",
         function_name=function_name,

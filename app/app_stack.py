@@ -130,7 +130,8 @@ class AccountCreationWorkflowStack(Stack):
             scope=self,
             function_name='AccountTagToSsmParameter',
             function_path='event',
-            description='This function will create a local SSM Parameter for each Account Tag found in AWS Organizations.',
+            description='This function will create a local SSM Parameter for each Account Tag '
+                        'found in AWS Organizations.',
             layers=[i_account_creation_helper_layer, i_boto3_layer],
             timeout=120,
             key=i_kms_keys['Lambda'],
@@ -141,11 +142,11 @@ class AccountCreationWorkflowStack(Stack):
         )
         i_account_tag_ssm_parameter_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "sts:AssumeRole"
-            ],
-            resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
-        ))
+                actions=[
+                    "sts:AssumeRole"
+                ],
+                resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
+            ))
         NagSuppressions.add_resource_suppressions(
             i_account_tag_ssm_parameter_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
             [{
@@ -155,7 +156,8 @@ class AccountCreationWorkflowStack(Stack):
                           "during workflow). Scoped to specific role name: "
                           f"{config['appInfrastructure']['accountTagToSsmParameterRole']}",
                 "appliesTo": partition_variants([
-                    f"Resource::arn:<AWS::Partition>:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"
+                    f"Resource::arn:<AWS::Partition>:iam::*:role/{
+                        config['appInfrastructure']['accountTagToSsmParameterRole']}"
                 ])
             }]
         )
@@ -175,17 +177,17 @@ class AccountCreationWorkflowStack(Stack):
             )
 
         events.Rule(self, "rEventRuleAccountTagToSsmParameter",
-            event_bus=i_event_bus,
-            event_pattern=events.EventPattern(
-                detail={
-                    "eventSource": ["organizations.amazonaws.com"],
-                    "eventName": ["TagResource", "UntagResource"]
-                },
-                detail_type=events.Match.equals_ignore_case("AWS API Call via CloudTrail"),
-                source=["aws.organizations"],
-            ),
-            targets=[targets.LambdaFunction(i_account_tag_ssm_parameter_fn)]
-        )
+                    event_bus=i_event_bus,
+                    event_pattern=events.EventPattern(
+                        detail={
+                            "eventSource": ["organizations.amazonaws.com"],
+                            "eventName": ["TagResource", "UntagResource"]
+                        },
+                        detail_type=events.Match.equals_ignore_case("AWS API Call via CloudTrail"),
+                        source=["aws.organizations"],
+                    ),
+                    targets=[targets.LambdaFunction(i_account_tag_ssm_parameter_fn)]
+                    )
 
         # Lambda Functions used by StepFunction
         sfn_lambdas = setup_default_stepfunction_lambdas(
@@ -237,9 +239,9 @@ class AccountCreationWorkflowStack(Stack):
         )
         i_sfn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=["lambda:InvokeFunction"],
-            resources=list(sfn_lambdas.values())
-        ))
+                actions=["lambda:InvokeFunction"],
+                resources=list(sfn_lambdas.values())
+            ))
 
         # Add tags to all resources created
         for key, value in config['tags'].items():

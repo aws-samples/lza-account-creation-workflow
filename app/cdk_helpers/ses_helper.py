@@ -1,4 +1,4 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved. 
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
 from aws_cdk import (
@@ -6,7 +6,7 @@ from aws_cdk import (
 )
 
 
-def create_ses_identity(scope, identity_name: str, identity_email: str) -> ses.IEmailIdentity:  
+def create_ses_identity(scope, identity_name: str, identity_email: str) -> ses.IEmailIdentity:
     """
     Creates an Amazon SES identity.
 
@@ -18,7 +18,7 @@ def create_ses_identity(scope, identity_name: str, identity_email: str) -> ses.I
     Returns:
         ses.IEmailIdentity: The created SES identity object.
     """
-    i_ses_identify = ses.EmailIdentity(scope, f"rSesIdentity{identity_name.title().replace('_','')}",
-        identity=ses.Identity.email(email=identity_email)
-    )
+    i_ses_identify = ses.EmailIdentity(scope, f"rSesIdentity{identity_name.title().replace('_', '')}",
+                                       identity=ses.Identity.email(email=identity_email)
+                                       )
     return i_ses_identify

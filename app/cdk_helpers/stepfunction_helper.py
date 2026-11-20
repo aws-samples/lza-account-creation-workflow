@@ -22,7 +22,7 @@ def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str)
     Returns:
         sfn.StateMachine: The created state machine object.
     """
-    log_group = logs.LogGroup(scope, f"rLogGroup{sfn_name.title().replace('/','')}")
+    log_group = logs.LogGroup(scope, f"rLogGroup{sfn_name.title().replace('/', '')}")
 
     stepfunction = sfn.StateMachine(
         scope, f"rStateMachine{sfn_name}",
