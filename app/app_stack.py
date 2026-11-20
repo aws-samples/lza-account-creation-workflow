@@ -156,8 +156,8 @@ class AccountCreationWorkflowStack(Stack):
                           "during workflow). Scoped to specific role name: "
                           f"{config['appInfrastructure']['accountTagToSsmParameterRole']}",
                 "appliesTo": partition_variants([
-                    f"Resource::arn:<AWS::Partition>:iam::*:role/{
-                        config['appInfrastructure']['accountTagToSsmParameterRole']}"
+                    f"Resource::arn:<AWS::Partition>:iam::*:role/"
+                    f"{config['appInfrastructure']['accountTagToSsmParameterRole']}"
                 ])
             }]
         )

@@ -66,8 +66,8 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
                     "secretsmanager:ListSecretVersionIds"
                 ],
                 resources=[
-                    f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:{
-                        config['appInfrastructure']['graphApiSecretName']}-*"]
+                    f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:"
+                    f"{config['appInfrastructure']['graphApiSecretName']}-*"]
             ))
         i_sync_ad_group_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
@@ -85,8 +85,8 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
                           "actions are scoped to the GraphApiSecret ARN pattern.",
                 "appliesTo": partition_variants([
                     "Resource::*",
-                    f"Resource::arn:<AWS::Partition>:secretsmanager:{region}:{account_id}:secret:{
-                        config['appInfrastructure']['graphApiSecretName']}-*"
+                    f"Resource::arn:<AWS::Partition>:secretsmanager:{region}:{account_id}:secret:"
+                    f"{config['appInfrastructure']['graphApiSecretName']}-*"
                 ])
             }]
         )

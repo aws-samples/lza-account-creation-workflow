@@ -181,8 +181,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                 "states:StartExecution"
             ],
             resources=[
-                f"arn:{partition}:states:{region}:{account_id}:stateMachine:{
-                    config['appInfrastructure']['stepFunctionName']}"]
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:"
+                f"{config['appInfrastructure']['stepFunctionName']}"]
         ))
 
     api_model = api.add_model(
@@ -251,10 +251,10 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                 "states:GetExecutionHistory"
             ],
             resources=[
-                f"arn:{partition}:states:{region}:{account_id}:stateMachine:{
-                    config['appInfrastructure']['stepFunctionName']}",
-                f"arn:{partition}:states:{region}:{account_id}:execution:{
-                    config['appInfrastructure']['stepFunctionName']}:*"
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:"
+                f"{config['appInfrastructure']['stepFunctionName']}",
+                f"arn:{partition}:states:{region}:{account_id}:execution:"
+                f"{config['appInfrastructure']['stepFunctionName']}:*"
             ]
         ))
 
@@ -300,8 +300,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                       "step function. Execution names are dynamic. Scoped to "
                       "specific state machine name with wildcard execution ID.",
             "appliesTo": partition_variants([
-                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:{
-                    config['appInfrastructure']['stepFunctionName']}:*"
+                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:"
+                f"{config['appInfrastructure']['stepFunctionName']}:*"
             ])
         }]
     )

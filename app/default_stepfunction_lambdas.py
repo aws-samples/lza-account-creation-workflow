@@ -78,8 +78,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 "codepipeline:ListPipelineExecutions"
             ],
             resources=[
-                f"arn:{partition}:codepipeline:{region}:{account_id}:{
-                    config['appInfrastructure']['lzaPipelineName']}"]
+                f"arn:{partition}:codepipeline:{region}:{account_id}:"
+                f"{config['appInfrastructure']['lzaPipelineName']}"]
         ))
     _sfn_lambdas.update({"CheckForRunningProcessesFunctionArn": i_check_for_running_proc_fn.function_arn})
 
@@ -187,8 +187,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 "codepipeline:ListPipelineExecutions"
             ],
             resources=[
-                f"arn:{partition}:codepipeline:{region}:{account_id}:{
-                    config['appInfrastructure']['lzaPipelineName']}"]
+                f"arn:{partition}:codepipeline:{region}:{account_id}:"
+                f"{config['appInfrastructure']['lzaPipelineName']}"]
         ))
     _sfn_lambdas.update({"CreateAccountFunctionArn": i_create_account_fn.function_arn})
 
@@ -219,8 +219,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 "codebuild:BatchGetBuilds"
             ],
             resources=[
-                f"arn:{partition}:codebuild:{region}:{account_id}:project/{
-                    config['appInfrastructure']['accountDecommissionProject']}",
+                f"arn:{partition}:codebuild:{region}:{account_id}:project/"
+                f"{config['appInfrastructure']['accountDecommissionProject']}",
                 lza_codebuild_projects_arn
             ]
         ))
@@ -267,8 +267,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 "codepipeline:ListActionExecutions"
             ],
             resources=[
-                f"arn:{partition}:codepipeline:{region}:{account_id}:{
-                    config['appInfrastructure']['lzaPipelineName']}"]
+                f"arn:{partition}:codepipeline:{region}:{account_id}:"
+                f"{config['appInfrastructure']['lzaPipelineName']}"]
         ))
     _sfn_lambdas.update({"GetAccountStatusFunctionArn": i_get_account_status_fn.function_arn})
 
@@ -411,8 +411,8 @@ def setup_default_stepfunction_lambdas(scope, config: dict, boto3_layer: lambda_
                 "codepipeline:ListActionExecutions"
             ],
             resources=[
-                f"arn:{partition}:codepipeline:{region}:{account_id}:{
-                    config['appInfrastructure']['lzaPipelineName']}"]
+                f"arn:{partition}:codepipeline:{region}:{account_id}:"
+                f"{config['appInfrastructure']['lzaPipelineName']}"]
         ))
     i_validate_resources_fn.add_to_role_policy(
         statement=iam.PolicyStatement(

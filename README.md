@@ -57,6 +57,12 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 - [Install Landing Zone Accelerator into the Management Account](https://aws.amazon.com/solutions/implementations/landing-zone-accelerator-on-aws/).
 
 - [Install the AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html).
+  The CDK CLI must be version 2.1149.0 or later to read the output of
+  `aws-cdk-lib` 2.277.0. Update it with `npm install -g aws-cdk`.
+
+- Python 3.11 or later for the CDK app (the pipeline's CodeBuild image,
+  `aws/codebuild/standard:7.0`, runs Python 3.11). The Lambda functions run
+  on Python 3.12.
 
 - [Install Docker](https://docs.docker.com/engine/install/) and start the Docker Engine.
 

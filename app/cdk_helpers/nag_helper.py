@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-PARTITION_TOKEN = "<AWS::Partition>"
+PARTITION_PLACEHOLDER = "<AWS::Partition>"
 # Partitions listed in the "@aws-cdk/core:target-partitions" context of cdk.json
 LITERAL_PARTITIONS = ("aws", "aws-cn")
 
@@ -25,9 +25,9 @@ def partition_variants(applies_to: list) -> list:
     expanded = []
     for entry in applies_to:
         expanded.append(entry)
-        if PARTITION_TOKEN in entry:
+        if PARTITION_PLACEHOLDER in entry:
             expanded.extend(
-                entry.replace(PARTITION_TOKEN, partition)
+                entry.replace(PARTITION_PLACEHOLDER, partition)
                 for partition in LITERAL_PARTITIONS
             )
     return expanded

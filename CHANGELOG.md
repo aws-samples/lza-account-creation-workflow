@@ -29,8 +29,21 @@
   `ASSUMED_CONFIG_LOG_ROLE_NAME` variable. Remove the
   `lza-config-log-validation-role` stack from your LZA customizations.
 
+### Changed
+
+- Update Python dependencies: aws-cdk-lib 2.277.0, cdk-nag 2.38.2,
+  boto3 1.44.7, PyYAML 6.0.3, requests 2.34.2, msal 1.39.0, PyGithub 2.10.0,
+  urllib3 2.8.0, moto 5.2.5, pytest 9.2.0, pytest-cov 7.1.0 and tox 4.67.15.
+  `pip-audit` reports no known vulnerabilities for the pinned set.
+- The CDK CLI must be 2.1149.0 or later.
+- Migrate the unit tests to moto 5 (`mock_aws`).
+- Reformat the Python code to pass `pycodestyle` at 120 columns. Layout only;
+  no behaviour change.
+
 ### Fixed
 
+- Keep the CDK app compatible with Python 3.11, which the pipeline's synth
+  step uses: no f-string expressions spread over several lines.
 - Attach the `account_creation_helper` layer to CheckForRunningProcesses,
   CreateAccountS3 and CreateAccountGitHub.
 - Grant GetAccountStatus `codebuild:BatchGetBuilds` on the LZA CodeBuild
