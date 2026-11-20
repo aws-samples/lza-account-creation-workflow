@@ -39,22 +39,27 @@ Resources:
               ArnLike:
                 aws:PrincipalARN:
                   - !Sub arn:${AWS::Partition}:iam::${pManagementAccountId}:role/${pRolePrefix}*
-      Policies:
-        - PolicyName: AccountSsmManagement
-          PolicyDocument: 
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameters
-                  - ssm:PutParameter
-                  - ssm:DeleteParameter
-                  - ssm:AddTagsToResource
-                  - ssm:RemoveTagsFromResource
-                Resource: 
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${pSsmParameterPrefix}*
+      ManagedPolicyArns:
+        - !Ref rAccountSsmManagementManagedPolicy
       Tags:
         - Key: AccountCreationComponent
           Value: true
         - Key: CreatedBy
           Value: LZA_CustomizationConfig
+
+  rAccountSsmManagementManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows managing the SSM Parameters that mirror AWS Account tags
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameters
+              - ssm:PutParameter
+              - ssm:DeleteParameter
+              - ssm:AddTagsToResource
+              - ssm:RemoveTagsFromResource
+            Resource:
+              - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${pSsmParameterPrefix}*

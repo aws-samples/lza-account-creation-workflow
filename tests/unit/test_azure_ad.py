@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 
 
-from app.lambda_layer.azure_ad_helper.python.ms_graph_api import (
+from app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api import (
     GraphApiRequestException,
     Group,
     MsGraphApiConnection,
@@ -16,6 +16,7 @@ from app.lambda_src.stepfunction.AzureADGroupSync.helpers import get_secret_valu
 from app.lambda_src.stepfunction.AzureADGroupSync.main import lambda_handler
 
 import json
+import boto3
 # import requests
 from dataclasses import dataclass
 from typing import List
@@ -24,7 +25,7 @@ from unittest.mock import patch
 # import boto3
 import pytest
 
-from moto import mock_secretsmanager
+from moto import mock_aws
 from moto.secretsmanager.models import secretsmanager_backends
 from moto.core import DEFAULT_ACCOUNT_ID
 
@@ -64,13 +65,13 @@ def test_create_group_settings_object():
 
 @pytest.fixture
 def mocked_secrets(aws_credentials):
-    with mock_secretsmanager():
-        sm_backend = secretsmanager_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
-        sm_backend.create_secret(       # nosec B106 - this is a unit test, no secrets are being stored
-            name="testing/graph-api",
-            secret_string='{"client_id": "test_cid", "tenant_id": "test_tid", "secret_value": "test_secret_key", "object_id": "app_obj_id", "app_role_id": "app_role_id"}',
+    with mock_aws():
+        sm_client = boto3.client("secretsmanager", region_name="us-east-1")
+        sm_client.create_secret(       # nosec B106 - this is a unit test, no secrets are being stored
+            Name="testing/graph-api",
+            SecretString='{"client_id": "test_cid", "tenant_id": "test_tid", "secret_value": "test_secret_key", "object_id": "app_obj_id", "app_role_id": "app_role_id"}',
         )
-        yield sm_backend
+        yield secretsmanager_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
 
 
 def test_retrieve_ssm_secret_value(mocked_secrets):
@@ -83,7 +84,7 @@ def test_retrieve_ssm_secret_value(mocked_secrets):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -106,7 +107,7 @@ def test_create_api_object(get_mocked_msal_creds):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -118,7 +119,7 @@ def test_client_secret_is_private(get_mocked_msal_creds):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -135,7 +136,7 @@ def test_create_group_obj(get_mocked_msal_creds, requests_mock):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -156,7 +157,7 @@ def test_list_existing_groups(get_mocked_msal_creds, requests_mock):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -186,7 +187,7 @@ def test_create_group(get_mocked_msal_creds, requests_mock):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -219,7 +220,7 @@ def test_create_group_error(get_mocked_msal_creds, requests_mock):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -236,7 +237,7 @@ def test_handle_request_response_without_json(get_mocked_msal_creds, requests_mo
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -258,7 +259,7 @@ def test_synchronizer_raises_no_job_exception(get_mocked_msal_creds, requests_mo
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -283,7 +284,7 @@ def test_synchronizer_raises_bad_status(get_mocked_msal_creds, requests_mock):
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
@@ -323,26 +324,34 @@ def test_lambda_payload(
         "Payload": {
             "AccountInfo": {
                 "AccountName": "pytest",
-                "ADIntegration": {"test-permission-set": "test-group"},
+                "ADIntegration": [{"PermissionSetName": "test-permission-set", "ActiveDirectoryGroupName": "test-group"}],
             },
             "Account": {"Outputs": {"AccountId": DEFAULT_ACCOUNT_ID}},
         }
     }
     payload = lambda_handler(event, {})
-    assert payload["AccountInfo"]["ADIntegration"] == {
-        "test-permission-set": "test-group"
-    }
+    assert payload["AccountInfo"]["ADIntegration"] == [
+        {"PermissionSetName": "test-permission-set", "ActiveDirectoryGroupName": "test-group"}
+    ]
     assert payload["Account"]["Outputs"]["AccountId"] == DEFAULT_ACCOUNT_ID
 
 
 @patch(
-    "app.lambda_layer.azure_ad_helper.python.ms_graph_api.ConfidentialClientApplication",
+    "app.lambda_src.stepfunction.AzureADGroupSync.ms_graph_api.ConfidentialClientApplication",
     return_value=MockedMsalCredentials,
     autospec=True,
 )
 def test_create_group_error_in_lambda(
     get_mocked_msal_creds, requests_mock, mocked_secrets, monkeypatch
 ):
+    requests_mock.get(      # nosec B113 - This is a mock request with no timeout arguement
+        "https://login.microsoftonline.com/test_tid/v2.0/.well-known/openid-configuration",
+        text=json.dumps(mocked_auth_response),
+    )
+    requests_mock.post(     # nosec B113 - This is a mock request with no timeout arguement
+        "https://login.microsoftonline.com/test_tid/oauth2/v2.0/token",
+        text='{"access_token":"afaketoken"}',
+    )
     requests_mock.post(     # nosec B113 - This is a mock request with no timeout arguement
         "https://graph.microsoft.com/v1.0/groups",
         text='{"error": "there was a problem"}',
@@ -352,6 +361,10 @@ def test_create_group_error_in_lambda(
         text='{"GroupName": "NewGroup", "id": "12345"}',
     )
     requests_mock.get(      # nosec B113 - This is a mock request with no timeout arguement
+        "https://graph.microsoft.com/v1.0/groups",
+        text='{"value":[]}',
+    )
+    requests_mock.get(      # nosec B113 - This is a mock request with no timeout arguement
         "https://graph.microsoft.com/beta/servicePrincipals/app_obj_id/synchronization/jobs",
         text='{"value":[{"id":"jjjjj"}]}',
     )
@@ -359,14 +372,14 @@ def test_create_group_error_in_lambda(
         "Payload": {
             "AccountInfo": {
                 "AccountName": "pytest",
-                "ADIntegration": {"test-permission-set": "test-group"},
+                "ADIntegration": [{"PermissionSetName": "test-permission-set", "ActiveDirectoryGroupName": "test-group"}],
             },
             "Account": {"Outputs": {"AccountId": DEFAULT_ACCOUNT_ID}},
         }
     }
     monkeypatch.setenv("GRAPH_API_SECRET_NAME", "testing/graph-api")
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         lambda_handler(event, {})
 
 

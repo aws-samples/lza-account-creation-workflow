@@ -35,7 +35,7 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 | app/lambda_src/stepfunction/AttachPermissionSet  | AWS Lambda Function that adds a permissions set to an SSO Group. |
 | app/lambda_src/stepfunction/AzureADGroupSync   | AWS Lambda Function that syncs the desired Microsoft Entra ID Group to AWS IAM Identity Center. |
 | app/lambda_src/stepfunction/CheckForRunningProcesses   | AWS Lambda Function that checks if the Decommissioning CodeBuild project and LZA Pipeline are currently running. If one of those resources is running, it will delay the AWS Step Function. |
-| app/lambda_src/stepfunction/CreateAccountCodeCommit  | AWS Lambda Function that uses LZA's CodeCommit repository to create an AWS Account. **Deprecated Version** |
+| app/lambda_src/stepfunction/CreateAccountGitHub  | AWS Lambda Function that uses LZA's GitHub repository to create an AWS Account via pull request. |
 | app/lambda_src/stepfunction/CreateAccountS3  | AWS Lambda Function that uses LZA's S3 config bucket to create an AWS Account. |
 | app/lambda_src/stepfunction/CreateAdditionalResources  | AWS Lambda Function that creates AWS resources that couldn't be managed by LZA or CloudFormation (e.g., Account Alias, Service Catalog Tags). |
 | app/lambda_src/stepfunction/GetAccountStatus  | AWS Lambda Function that scans the AWS Service Catalog Provisioned Product to determine if the account creation has completed. |
@@ -57,6 +57,12 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
 - [Install Landing Zone Accelerator into the Management Account](https://aws.amazon.com/solutions/implementations/landing-zone-accelerator-on-aws/).
 
 - [Install the AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html).
+  The CDK CLI must be version 2.1149.0 or later to read the output of
+  `aws-cdk-lib` 2.277.0. Update it with `npm install -g aws-cdk`.
+
+- Python 3.11 or later for the CDK app (the pipeline's CodeBuild image,
+  `aws/codebuild/standard:7.0`, runs Python 3.11). The Lambda functions and
+  layers run on Python 3.14.
 
 - [Install Docker](https://docs.docker.com/engine/install/) and start the Docker Engine.
 
@@ -93,15 +99,30 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
   aws secretsmanager update-secret --secret-id GraphApiSecret --secret-string "{\"client_id\": \"${CLIENT_ID}\", \"tenant_id\": \"${TENANT_ID}\", \"object_id\": \"${OBJECT_ID}\", \"app_role_id\": \"${APP_ROLE_ID}\", \"secret_value\": \"${SECRET_VALUE}\", \"secret_id\": \"${SECRET_ID}\"}"
   ```
 
-  - Use LZA to install the three dependent AWS CloudFormation templates located in the dependencies directory.
+  - Use LZA to install the two dependent AWS CloudFormation templates located in the dependencies directory.
+
+- (Optional) If you choose to use GitHub as the LZA pipeline source (`lzaPipelineSource: GitHub`), you will need to create an AWS Secret containing a GitHub Personal Access Token (PAT).
+
+  - Create a GitHub Personal Access Token with the following permissions on the LZA config repository:
+    - `repo` (Full control of private repositories) — or fine-grained: Contents (Read and Write), Pull Requests (Read and Write)
+
+  - Create the AWS Secret:
+
+  ```bash
+  aws secretsmanager create-secret --name GitHubPATSecret --secret-string "<YOUR_GITHUB_PAT>"
+  ```
+
+  - Update the following values in `configs/deploy-config.yaml`:
+    - `lzaPipelineSource: GitHub`
+    - `githubSecretName: GitHubPATSecret`
+    - `githubRepoOwner: <your-github-org-or-user>`
+    - `githubRepoBranch: main` (or your target branch)
 
     - account-creation-validation-role.yaml: This template will be deployed to all AWS Accounts and will provide the Validation Lambda Function with read-only access to the new account. This ensures that the account was provisioned properly.
 
     - account-tagging-to-ssm-parameter-role.yaml: This template will be deployed to all AWS Accounts and will create an AWS SSM Parameter Store Parameter based on tags stored on the account within AWS Organizations. Each SSM Parameter will be prefixed with "/account/tags/".
 
-    - config-log-validation-role.yaml: This template will be deployed into the LogArchive AWS Account and allow the Validation Lambda Function access to the S3 Bucket and AWS Config rules to ensure they are set up properly.
-
-    - Update the customizations-config.yaml file to deploy the three CloudFormation templates. Below is an example of the new entries for the config file.
+    - Update the customizations-config.yaml file to deploy the two CloudFormation templates. Below is an example of the new entries for the config file.
 
     ```yaml
     # customizations-config.yaml
@@ -125,19 +146,6 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
           parameters:
             - name: pManagementAccountId
               value: "{{ account Management }}"
-        - deploymentTargets:
-            accounts:
-              - LogArchive
-          description: IAM Role to validate Config and Logs
-          name: lza-config-log-validation-role
-          regions:
-            - us-east-1
-          template: cloudformation/config-log-validation-role.yaml
-          runOrder: 1 
-          terminationProtection: true          
-          parameters:
-            - name: pManagementAccountId
-              value: "{{ account Management }}"    
         # ---------------------------------
         # Account Tagging to Account SSM
         # ---------------------------------
@@ -158,11 +166,47 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
               value: "{{ account Management }}"
     ```
 
+- If `lzaPipelineSource` is `S3`, create two AWS Systems Manager parameters
+  in the management account and Region before you run `cdk synth` or
+  `cdk deploy`. `configs/deploy-config.yaml` reads them with `SSM:`
+  references, and the IAM policies of the CreateAccountS3 function are
+  scoped to the exact key and bucket. If a value is empty or has the wrong
+  format, `cdk synth` fails with an error that names the parameter.
+
+  ```bash
+  aws ssm put-parameter --type String \
+    --name /lza-account-creation-workflow/lza-pipeline-kms-key-arn \
+    --value "arn:aws:kms:<region>:<management-account-id>:key/<key-id>"
+  aws ssm put-parameter --type String \
+    --name /lza-account-creation-workflow/lza-config-bucket-name \
+    --value "<lza-config-bucket-name>"
+  ```
+
+  - The synth CodeBuild project of the deployment pipeline reads both
+    parameters with `ssm:GetParameter`, limited to those two parameter ARNs.
+    A synth CodeBuild project cannot assume the CDK bootstrap lookup role
+    unless it is granted `sts:AssumeRole` on it, and this pipeline does not
+    grant that. The CDK CLI then falls back to the credentials of the synth
+    project's own role, which is why the permission sits on that role.
+
+- Upgrading from an earlier version:
+
+  - The `config-log-validation-role.yaml` template and the
+    `lzaConfigLogValidationRole` setting were removed because no code used
+    the role. Remove the `lza-config-log-validation-role` stack from the
+    LogArchive account in your LZA `customizations-config.yaml`.
+  - Lambda log groups are now regular CloudWatch log groups managed by the
+    stack, with a two-month retention. The previous log retention custom
+    resource deletes the old log groups when the stack updates, so log
+    history from before the update is not kept.
+  - The pipeline source and artifact buckets now write S3 server access logs
+    to a new access-log bucket. Objects in that bucket expire after 90 days.
+
 ### **DISCLAIMER**
 
 This solution will be deployed into your AWS Management Account. The AWS Management Account is a highly privileged account and should be treated with care. We recommend that customers use a federated role for access, _NOT_ an IAM user, and follow the principle of least privilege.
 
-For this example, S3 Bucket Access Logging is not enabled but it is recommended that you enable it when adding this solution to your enterprise.
+For this example, S3 Bucket Access Logging is enabled on the pipeline source and artifact buckets and delivers to a dedicated access-log bucket. It is recommended that you also enable it on any other bucket you add when adopting this solution in your enterprise.
 
 ## Deployment Steps
 
@@ -177,6 +221,8 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 - Update the config/deploy-config.yaml file with the appropriate values. Typical values that will need updating include: accountCreationFailure, accountCompletionFromEmail, ssoLoginUrl, rootEmailPrefix, rootEmailDomain, useGraphApiSync, and enableAzureADIntegration.
 
   - To use the optional Microsoft Entra ID integration, set enableAzureADIntegration to true and provide the necessary Microsoft Entra ID configuration details. Ensure that the graphApiSecretName value matches the AWS Secret created in the prerequisite step.
+
+  - To use GitHub as the LZA pipeline source, set `lzaPipelineSource: GitHub` and configure the `githubSecretName`, `githubRepoOwner`, and `githubRepoBranch` values. The GitHub integration creates a pull request against the configured branch rather than pushing directly.
 
 - Ensure that the Docker Engine is running, then run the following CDK commands to deploy the solution's deployment infrastructure. This will set up a CI/CD Pipeline to allow for future enhancements to the solution. It will configure the deployment pipeline and dependent resources (e.g., CodePipeline, CodeBuild, S3, KMS, IAM). 
 
@@ -210,7 +256,7 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
 
 - **account-name** **(-a)** (_string_) -- [REQUIRED]
 
-  The name for the newly managed AWS Account that will be created by AWS Service Catalog / Control Tower.
+  The name for the newly managed AWS Account that will be created by AWS Service Catalog / Control Tower. Must be 3-50 characters, alphanumeric and hyphens only, must start and end with an alphanumeric character. YAML special characters are not permitted.
 
 - **support-dl** **(-s)** (_string_) -- [REQUIRED]
 
@@ -290,6 +336,11 @@ For this example, S3 Bucket Access Logging is not enabled but it is recommended 
   ```
 
 ### Invoking the AWS Step Function using API Gateway (awscurl)
+
+- The API stage is protected by a regional AWS WAF web ACL with the AWS
+  managed IP reputation, common rule set and known bad inputs rule groups,
+  plus a limit of 1,000 requests per client IP in any five minutes. The web
+  ACL adds a monthly WAF charge (web ACL, rules and requests).
 
 - The examples below use [awscurl](https://docs.aws.amazon.com/prometheus/latest/userguide/AMP-compatible-APIs.html).
 
@@ -402,7 +453,7 @@ awscurl --service execute-api \
 Failure Result
 
 ```bash
-{"Status": "FAILED", "Cause": "{\"errorMessage\":\"('A task in the account creation step function failed: ', 'The accounts-config.yaml already contains an account with the name of %s and the force update flag is set to False lza2-test-12')\",\"errorType\":\"TypeError\",\"requestId\":\"00000000-1111-2222-3333-444444444444\",\"stackTrace\":[\"  File \\\"/var/task/main.py\\\", line 53, in lambda_handler\\n    raise TypeError(str(e)) from e\\n\"]}"}
+{"Status": "FAILED", "Cause": "{\"errorMessage\":\"The accounts-config.yaml already contains an account with the name of 'lza2-test-12' and the force-update flag is False\",\"errorType\":\"RuntimeError\",\"requestId\":\"00000000-1111-2222-3333-444444444444\"}"}
 ```
 
 ## Uninstall Solution

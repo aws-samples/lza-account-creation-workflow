@@ -77,7 +77,7 @@ def is_config_logging_configured(account_id: str, log_acct_role_name: str, log_a
 
 
 def get_ssm_parameter(parameter_key: str):
-    """  
+    """
     Get SSM Parameter Value
 
     Args:

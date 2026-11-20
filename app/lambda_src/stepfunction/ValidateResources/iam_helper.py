@@ -33,7 +33,7 @@ class ValidateIam:
         """
         Checks if an IAM role exists.
 
-        Args: 
+        Args:
             role_name (str): Name of the role
 
         Returns:

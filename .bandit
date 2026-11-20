@@ -1,0 +1,14 @@
+# Bandit configuration. Use with: bandit -c .bandit --recursive <paths>
+#
+# B608 (hardcoded_sql_expressions) is a false positive for this code base.
+# The solution has no SQL, no database driver and no query builder. Bandit's
+# B608 pattern matches English text that contains words such as "update" and
+# "set" inside a string that is formatted with an f-string or "%" (for
+# example the "force update flag is set to False" error messages). Those
+# messages were reworded so the pattern no longer matches. B608 is
+# deliberately not skipped here so that a real SQL string added later is
+# still reported.
+exclude_dirs:
+  - .venv
+  - cdk.out
+  - node_modules

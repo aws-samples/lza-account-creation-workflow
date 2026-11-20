@@ -8,7 +8,8 @@ A task in the account creation step function failed: ', 'An error occurred (Acce
 
 ## Solution-1
 
-Ensure that the role located in the deploy-config.yaml _lzaAccountValidationRole_ matches the role that has been deployed within the LZA solution.
+Ensure that the role located in the deploy-config.yaml _lzaAccountValidationRole_
+matches the role that has been deployed within the LZA solution.
 
 ## Issue-2
 
@@ -24,10 +25,53 @@ RuntimeError: Failed to bundle asset lza-account-creation-workflow-pipeline/Depl
 ## Issue-3
 
 ```bash
-1:05:11 PM | CREATE_FAILED        | AWS::CodeCommit::Repository | rCodeCommitRepositoryFC966E2D
 Code archive supplied cannot be more than 20 MB compressed
 ```
 
 ## Solution-3
 
-If using a virutal environment for python make sure to use the directory _.venv_ if you decided to keep your currenty virtual environment name. Update the config _deployInfrastructure > codecommit > ignoreFilesDirectoriesCodeCommit_ with your current virtual enviornment directory to ensure that it does't get added to AWS CodeCommit.
+The source archive is too large. `scripts/upload_to_source_bucket.py` already
+leaves out `.venv`, `cdk.out`, `.git` and `node_modules`. If your virtual
+environment has another name, or other large folders sit in the project, add
+them to `deployInfrastructure > sourceCode > ignoreFilesDirectories` in
+`configs/deploy-config.yaml`.
+
+## Issue-4
+
+```bash
+This CDK CLI is not compatible with the CDK library used by your application.
+(Cloud assembly schema version mismatch ...)
+```
+
+## Solution-4
+
+Update the CDK CLI with `npm install -g aws-cdk`. The CLI must be 2.1149.0 or
+later.
+
+## Issue-5
+
+```bash
+SSM parameter not available in account 000000000000, region us-east-1: /lza-account-creation-workflow/lza-pipeline-kms-key-arn
+```
+
+## Solution-5
+
+Create the two SSM parameters described in the README prerequisites
+(`/lza-account-creation-workflow/lza-pipeline-kms-key-arn` and
+`/lza-account-creation-workflow/lza-config-bucket-name`) in the management
+account and Region, then run `cdk synth` again.
+
+## Issue-6
+
+```bash
+SyntaxError: unterminated string literal
+```
+
+The pipeline's Synth step fails on a line that works locally.
+
+## Solution-6
+
+The pipeline synthesizes on Python 3.11. An f-string whose `{...}` expression
+spans several lines only works on Python 3.12 or later. Keep each expression on
+one line, or split the string into adjacent f-strings. Check locally with
+`python3.11 -m compileall -q app pipeline`.

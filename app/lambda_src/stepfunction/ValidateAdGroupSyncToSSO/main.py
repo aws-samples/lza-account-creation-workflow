@@ -4,6 +4,9 @@
 import json
 import logging
 import os
+
+from botocore.exceptions import ClientError
+
 from identity_center_helper import (
     lookup_group_guid_from_sso,
     get_sso_instance_id_and_arn,
@@ -23,27 +26,28 @@ class ExceededWaitTimeLimit(Exception):
 
 
 def lambda_handler(event, context):
-    """
-    Validates Active Directory group sync to AWS SSO.
+    """Validate Active Directory group sync to AWS SSO.
 
-    The function checks if AD groups from the payload have 
-    synced to AWS SSO. It retries if not found, incrementing 
-    a wait count. Returns the updated payload.
+    Checks if AD groups from the payload have synced to AWS SSO.
+    Retries if not found, incrementing a wait count.
 
     Args:
         event (dict): Event payload containing account info
-        context (object): Lambda Context runtime methods  
+        context (object): Lambda Context runtime methods
 
     Returns:
         dict: Updated payload with sync status
     """
-    LOGGER.info(json.dumps(event))
+    LOGGER.debug('Event: %s', json.dumps(event))
+
     try:
         payload = event['Payload']
 
         # List of dictionaries
         # Ex. [{"PermissionSetName":"CustomerAccountAdmin","ActiveDirectoryGroupName":"platform-admin"}]
-        group_names = list(x['ActiveDirectoryGroupName'] for x in payload['AccountInfo']["ADIntegration"])
+        group_names = list(
+            x['ActiveDirectoryGroupName'] for x in payload['AccountInfo']["ADIntegration"]
+        )
 
         identity_store_id, _ = get_sso_instance_id_and_arn()
         LOGGER.info('Identity store id: %s', identity_store_id)
@@ -68,13 +72,24 @@ def lambda_handler(event, context):
 
             if payload['AzureAD']['WaitCount'] > WAIT_LIMIT:
                 raise ExceededWaitTimeLimit(
-                    'Wait time limit of {} minutes exceeded'.format(WAIT_LIMIT)
+                    'Wait time limit of %s minutes exceeded' % WAIT_LIMIT
                 )
 
             LOGGER.info('Group %s not found in Identity Center', group_name)
-            LOGGER.info('Waiting for group to be synched')
+            LOGGER.info('Waiting for group to be synced')
 
         return payload
+
+    except ExceededWaitTimeLimit:
+        raise
+    except ClientError as client_err:
+        LOGGER.error(
+            "AWS API error: %s", client_err.response['Error']['Message']
+        )
+        raise RuntimeError(str(client_err)) from client_err
+    except KeyError as key_err:
+        LOGGER.error("Missing required key in payload: %s", key_err)
+        raise RuntimeError(str(key_err)) from key_err
     except Exception as e:
-        LOGGER.exception(e)
-        raise TypeError(str(e)) from e
+        LOGGER.exception("Unexpected error in ValidateADGroupSyncToSSO")
+        raise RuntimeError(str(e)) from e

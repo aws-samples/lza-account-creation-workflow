@@ -4,7 +4,7 @@
 from aws_cdk import aws_ssm as ssm
 
 
-def create_ssm_parameter(scope, parameter_key: str, parameter_value: str, 
+def create_ssm_parameter(scope, parameter_key: str, parameter_value: str,
                          parameter_type: str = "string", parameter_description: str = '') -> None:
     """
     Creates an AWS Systems Manager (SSM) parameter.
@@ -20,8 +20,8 @@ def create_ssm_parameter(scope, parameter_key: str, parameter_value: str,
         None
     """
     if parameter_type == 'string':
-        ssm.StringParameter(scope, f"rSsm{parameter_key.title().replace('/','')}",
-            parameter_name=parameter_key,
-            string_value=parameter_value,
-            description=parameter_description
-        )
+        ssm.StringParameter(scope, f"rSsm{parameter_key.title().replace('/', '')}",
+                            parameter_name=parameter_key,
+                            string_value=parameter_value,
+                            description=parameter_description
+                            )

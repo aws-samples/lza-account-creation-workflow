@@ -15,8 +15,8 @@ def get_services_to_validate():
     """
     Loads validation configuration from YAML file.
 
-    Returns a list of booleans specifying which AWS services 
+    Returns a list of booleans specifying which AWS services
     should be validated based on the contents of the YAML file.
     """
-    with open('./validate.yaml', 'rb') as file:
+    with open('./validate.yaml', encoding='utf-8') as file:
         return yaml.safe_load(file)

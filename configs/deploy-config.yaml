@@ -50,8 +50,13 @@ appInfrastructure:
   
   # LZA Level Variables 
   lzaPipelineName: AWSAccelerator-Pipeline
-  lzaPipelineSource: S3   # Options: S3 | CodeCommit | Github (WIP)
+  lzaPipelineSource: S3   # Options: S3 | GitHub
   lzaRepositoryName: aws-accelerator-config
+
+  # LZA values read from SSM at synth time (S3 source only). Create both
+  #   parameters in the management account before deploying (see README).
+  lzaPipelineKmsKeyArn: SSM:/lza-account-creation-workflow/lza-pipeline-kms-key-arn
+  lzaConfigBucketName: SSM:/lza-account-creation-workflow/lza-config-bucket-name
   
   # Decommissioning Solution Varaibles
   #   This config is used to check to make sure that the Decommissioning CodeBuild 
@@ -61,7 +66,6 @@ appInfrastructure:
   # IAM Roles used for validation and tagging
   accountTagToSsmParameterRole: account-tagging-to-ssm-parameter
   lzaAccountValidationRole: account-creation-validation
-  lzaConfigLogValidationRole: config-log-validation
 
   # The URL used for managed accounts to login, the default Login Url can be found under the "Users and access" section within AWS Control Tower.
   ssoLoginUrl: https://d-012345679.awsapps.com/start/
@@ -80,3 +84,8 @@ appInfrastructure:
   enableAzureADIntegration: True
   useGraphApiSync: False                  # This will use GrapApiSync to update the AWS Identity Center and Azure EntraID.
   graphApiSecretName: GraphApiSecret      # This is only needed if "useGraphApiSync" is set to true
+
+  # GitHub Integration configuration (only needed if lzaPipelineSource is "GitHub")
+  githubSecretName: GitHubPATSecret       # AWS Secrets Manager secret containing the GitHub Personal Access Token
+  githubRepoOwner: ''                     # GitHub organization or user that owns the LZA config repository
+  githubRepoBranch: main                  # Branch to create PRs against

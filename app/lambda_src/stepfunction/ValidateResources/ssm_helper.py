@@ -33,7 +33,7 @@ class ValidateSsm:
         """
         Checks if an SSM parameter exists.
 
-        Args: 
+        Args:
             parameter_name (str): Name of the parameter
 
         Returns:

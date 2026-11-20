@@ -4,6 +4,9 @@
 import os
 import json
 import logging
+
+from botocore.exceptions import ClientError
+
 from identity_center_helper import (
     create_account_assignment_for_group,
     lookup_group_guid_from_sso,
@@ -18,12 +21,10 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """
-    Handles a Lambda function that assigns permissions to AWS accounts.
+    """Assign permission sets to AWS accounts via Identity Center.
 
-    The function is passed an event containing payload data and 
-    assigns permissions to the account based on the AD integration 
-    configuration in the payload.
+    Processes AD integration configuration from the payload and creates
+    account assignments for each permission set and group combination.
 
     Args:
         event (dict): The event payload containing account info
@@ -32,7 +33,7 @@ def lambda_handler(event, context):
     Returns:
         dict: The updated payload with account assignments appended
     """
-    LOGGER.info(json.dumps(event))
+    LOGGER.debug('Event: %s', json.dumps(event))
 
     try:
         payload = event['Payload']
@@ -47,8 +48,10 @@ def lambda_handler(event, context):
         LOGGER.info('Instance ARN: %s', instance_arn)
 
         for item in ad_integration:
-            LOGGER.info('Creating account assignment for Permission Set (%s) with AAD Group (%s) in %s',
-                        item['PermissionSetName'], item['ActiveDirectoryGroupName'], account_id)
+            LOGGER.info(
+                'Creating account assignment for Permission Set (%s) with AAD Group (%s) in %s',
+                item['PermissionSetName'], item['ActiveDirectoryGroupName'], account_id
+            )
 
             group_guid = lookup_group_guid_from_sso(
                 group_name=item['ActiveDirectoryGroupName'],
@@ -70,9 +73,18 @@ def lambda_handler(event, context):
             )
             payload['AccountAssignments'].append(response['AccountAssignmentCreationStatus'])
 
-        LOGGER.info(response)
+        LOGGER.info('Account assignments completed for %s', account_id)
         return payload
 
+    except ClientError as client_err:
+        LOGGER.error(
+            "AWS API error attaching permission set: %s",
+            client_err.response['Error']['Message']
+        )
+        raise RuntimeError(str(client_err)) from client_err
+    except KeyError as key_err:
+        LOGGER.error("Missing required key in payload: %s", key_err)
+        raise RuntimeError(str(key_err)) from key_err
     except Exception as e:
-        LOGGER.exception(e)
-        raise TypeError(str(e)) from e
+        LOGGER.exception("Unexpected error in AttachPermissionSet")
+        raise RuntimeError(str(e)) from e

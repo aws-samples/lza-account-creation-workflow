@@ -50,13 +50,19 @@ Resources:
               Service: ['events.amazonaws.com']
             Action:
               - sts:AssumeRole
-      Policies:
-        - PolicyName: AccountTagToSsmParameterEventRule
-          PolicyDocument: 
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - events:PutEvents
-                Resource: 
-                  - !Ref pMainEventRuleArn
+      ManagedPolicyArns:
+        - !Ref rAccountTagToSsmParameterEventRuleManagedPolicy
+
+  rAccountTagToSsmParameterEventRuleManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows the event rule to send events to the main event bus
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - events:PutEvents
+            Resource:
+              - !Ref pMainEventRuleArn
+

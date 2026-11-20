@@ -4,7 +4,9 @@
 import os
 import json
 import logging
-import traceback
+
+from botocore.exceptions import ClientError
+
 from helper import (
     create_account_alias,
     create_account_tags
@@ -18,17 +20,18 @@ logging.getLogger("botocore").setLevel(logging.ERROR)
 
 
 def lambda_handler(event, context):
-    """This function will get the AWS Service Catalog / Control Tower Account Deployment status.
+    """Create additional AWS resources not managed by LZA or CloudFormation.
+
+    Creates account alias and applies organization tags to the new account.
 
     Args:
         event (dict): Event information passed in by the AWS Step Functions
         context (object): Lambda Function context information
 
     Returns:
-        dict: Payload with additional values for Account Status. This will be passed to the next step in the
-        Step Function.
+        dict: Payload passed to the next step in the Step Function.
     """
-    print(json.dumps(event))
+    LOGGER.debug('Event: %s', json.dumps(event))
 
     try:
         payload = event.get('Payload')
@@ -40,7 +43,7 @@ def lambda_handler(event, context):
             account_name = payload['Account']['Outputs']['ProvisionedProductName']
 
         assumed_creds = assume_role_arn(
-            role_arn=f"arn:aws:iam::{account_number}:role/{os.getenv('ASSUMED_ROLE_NAME')}"
+            role_arn="arn:aws:iam::%s:role/%s" % (account_number, os.getenv('ASSUMED_ROLE_NAME'))
         )
 
         # Create account alias
@@ -66,6 +69,15 @@ def lambda_handler(event, context):
 
         return payload
 
+    except ClientError as client_err:
+        LOGGER.error(
+            "AWS API error creating additional resources: %s",
+            client_err.response['Error']['Message']
+        )
+        raise RuntimeError(str(client_err)) from client_err
+    except KeyError as key_err:
+        LOGGER.error("Missing required key in payload: %s", key_err)
+        raise RuntimeError(str(key_err)) from key_err
     except Exception as e:
-        LOGGER.error(traceback.format_exc())
-        raise TypeError(str(e)) from e
+        LOGGER.exception("Unexpected error in CreateAdditionalResources")
+        raise RuntimeError(str(e)) from e

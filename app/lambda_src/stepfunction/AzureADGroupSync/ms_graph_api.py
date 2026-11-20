@@ -124,7 +124,8 @@ class MsGraphApiConnection:
         _token = self.client.acquire_token_for_client(scopes=self.scope)
         return 'Bearer ' + _token['access_token']
 
-    def request(self, path: str, method: Method, body: Optional[dict] = None, beta: Optional[bool] = False) -> requests.Response:
+    def request(self, path: str, method: Method, body: Optional[dict]
+                = None, beta: Optional[bool] = False) -> requests.Response:
         """Make a request to the Graph API
 
         Args:
@@ -282,7 +283,8 @@ class MsGraphApiGroups:
             dict: The Azure AD group information as a dictionary
         """
         _all_groups = self.list_existing_groups()
-        _group_lookup = next(iter([group for group in _all_groups if group['displayName'].lower() == group_name.lower()]), {})
+        _group_lookup = next(
+            iter([group for group in _all_groups if group['displayName'].lower() == group_name.lower()]), {})
         self.group_id = _group_lookup['id']
         return _group_lookup
 
@@ -304,10 +306,12 @@ class Synchronizer:
             The connection object for Azure Graph API
 
         Raises:
-            SynchronizationJobStartException: If no job ID is found for synchronization for the object ID passed in for AWS ID Center App
+            SynchronizationJobStartException: If no job ID is found for synchronization for the object ID
+                passed in for AWS ID Center App
         """
         _jobs_response = self.api_connection.request(
-            f'/servicePrincipals/{self.aws_identity_center_object_id}/synchronization/jobs', method=Method.GET, beta=self.beta).json()
+            f'/servicePrincipals/{self.aws_identity_center_object_id}/synchronization/jobs',
+            method=Method.GET, beta=self.beta).json()
         try:
             _job_id = next(iter(_jobs_response.get('value', {}))).get('id')
         except StopIteration as no_jobs_found:
@@ -316,13 +320,15 @@ class Synchronizer:
             raise self.__raise_job_exception()
 
         _start_sync = self.api_connection.request(
-            f'/servicePrincipals/{self.aws_identity_center_object_id}/synchronization/jobs/{_job_id}/start', body={}, method=Method.POST, beta=self.beta)
+            f'/servicePrincipals/{self.aws_identity_center_object_id}/synchronization/jobs/{_job_id}/start',
+            body={}, method=Method.POST, beta=self.beta)
 
         _status = _start_sync.status_code
         LOGGER.info('Status code: %s', _status)
         if _status not in [200, 204, "200", "204"]:
             raise SynchronizationJobStartException(
-                f'There was an error starting the synchronization of AWS Identity Center from Azure, status code returned {_status} for job ID {_job_id}')
+                f'There was an error starting the synchronization of AWS Identity Center from Azure, '
+                f'status code returned {_status} for job ID {_job_id}')
 
         LOGGER.info(
             'Successfully started sync of Azure AD to AWS Identity Center')

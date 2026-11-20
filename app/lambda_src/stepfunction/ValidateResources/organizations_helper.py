@@ -17,10 +17,10 @@ ORGS_CLIENT = boto3.client('organizations')
 def get_ou_ids(ou_path: str):
     """
     Get Organizational Unit ID for the Suspended OU Path and Root ID
-    
+
     Args:
         ou_path (str): Suspended Organizational Unit Path. The path will use : as a path seperator.
-    
+
     Returns:
         dict: AWS Organizations Root ID, ID of Suspended Organizational Unit
     """
@@ -51,14 +51,14 @@ def is_account_exist_in_ou(account_id: str, ou_name: str):
     """
     Validates account exists in organizational unit.
 
-    Checks if the given account ID exists as a child of the 
+    Checks if the given account ID exists as a child of the
     organizational unit by name. Returns result of validation check.
 
     Args:
         account_id (str): ID of account to validate
-        ou_name (str): Name of organizational unit 
+        ou_name (str): Name of organizational unit
 
-    Returns: 
+    Returns:
         dict: Validation result
     """
     LOGGER.info(f"Validating that Account: {account_id} exists in OU: {ou_name}")

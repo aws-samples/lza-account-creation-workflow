@@ -6,7 +6,7 @@ import boto3
 import botocore
 from botocore.stub import Stubber
 import pytest
-from moto import mock_organizations, mock_ses, mock_codepipeline, mock_iam
+from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.ses import ses_backends
 
@@ -24,7 +24,7 @@ def aws_credentials(monkeypatch):
 @pytest.fixture
 def mock_codepipeline_role(aws_credentials):
     """Mocked role for codepipeline to use when testing objects"""
-    with mock_iam():
+    with mock_aws():
         iam = boto3.client("iam", region_name="us-east-1")
         iam.create_role(
             RoleName="test-role",
@@ -37,14 +37,14 @@ def mock_codepipeline_role(aws_credentials):
 @pytest.fixture(scope="function")
 def organizations_client(aws_credentials):
     """Mocked boto3 org client to use when testing objects"""
-    with mock_organizations():
+    with mock_aws():
         yield boto3.client("organizations", region_name="us-east-1")
 
 
 @pytest.fixture(scope="function")
 def mocked_codepipeline_client(aws_credentials, mock_codepipeline_role):
     """Mocked boto3 codepipeline client to use when testing objects"""
-    with mock_codepipeline():
+    with mock_aws():
         cp_client = boto3.client("codepipeline", region_name="us-east-1")
         cp_client.create_pipeline(
             pipeline={
@@ -62,7 +62,7 @@ def mocked_codepipeline_client(aws_credentials, mock_codepipeline_role):
 @pytest.fixture(scope="function")
 def mocked_codebuild_client(aws_credentials):
     """Mocked boto3 codebuild client to use when testing objects"""
-    with mock_codepipeline():
+    with mock_aws():
         cb_client = boto3.client("codebuild", region_name="us-east-1")
         yield cb_client
 
@@ -94,7 +94,7 @@ def mocked_organization(organizations_client):
 
 @pytest.fixture(scope="function")
 def mocked_ses_backend(aws_credentials, monkeypatch):
-    with mock_ses():
+    with mock_aws():
         ses_backend = ses_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
         monkeypatch.setenv("FROM_EMAIL_ADDRESS", "test_from@test.com")
         ses_backend.verify_email_identity("test_from@test.com")

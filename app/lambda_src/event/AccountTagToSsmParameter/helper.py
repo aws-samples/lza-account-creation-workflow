@@ -18,7 +18,7 @@ def create_ssm_parameters(client: boto3.client, tags: list):
     Args:
         client (boto3.client): boto3 client
         tags (list): list of AWS Account Tags
-    
+
     Returns:
         None
     """
@@ -58,7 +58,7 @@ def delete_ssm_parameters(client: boto3.client, tags: list):
 
     Returns:
         None
-    """    
+    """
     for tag in tags:
         LOGGER.info(f"Deleting SSM Parameter /account/tags/{tag}")
         client.delete_parameter(

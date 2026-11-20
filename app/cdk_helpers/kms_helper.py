@@ -9,10 +9,10 @@ from aws_cdk import (
 def create_kms_keys(scope) -> dict:
     """
     Create KMS keys and return a dictionary of keys.
-    
+
     This function creates KMS keys for SNS topics and Lambda functions
     and returns a dictionary with the created keys.
-    
+
     Args:
         scope (Construct): The scope in which to define this construct's resources.
 

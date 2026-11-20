@@ -5,8 +5,6 @@ import os
 import copy
 import logging
 import zipfile
-from dataclasses import dataclass
-from time import sleep
 import yaml
 import boto3
 
@@ -26,16 +24,6 @@ class MissingOrganizationalUnitConfigException(Exception):
 
 class MissingEnvironmentVariableException(Exception):
     """Custom Exception"""
-
-
-def check_delay() -> int:
-    """Helper to retrieve default delay for polling.
-    
-    Returns:
-        int: Default delay in seconds
-    """
-
-    return 5
 
 
 def build_service_catalog_parameters(parameters: dict) -> list:
@@ -197,7 +185,7 @@ def update_account_config_file(
     path_to_file: str, account_info: dict, force_update: bool = False
 ) -> None:
     """Update LZA account config file with account info if not already present
-    
+
 
     Args:
         path_to_file (str): Path to the account-config.yaml file to update
@@ -241,7 +229,7 @@ def update_account_config_file(
         )
         raise MatchingAccountNameInConfigException(
             "The accounts-config.yaml already contains an account with the name of "
-            f"{config_info['name']} and the force update flag is set to False"
+            f"{account_info['AccountName']} and the force-update flag is False"
         )
     else:
         account_config["workloadAccounts"].append(config_info)
@@ -259,7 +247,7 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
 
     Returns:
         None
-        
+
     Raises:
         MissingOrganizationalUnitConfigException: If OU not found
     """
@@ -278,7 +266,7 @@ def validate_ou_in_config(path_to_file: str, target_ou_name: str) -> None:
 
 def build_root_email_address(account_name: str) -> str:
     """Build the root email address from prefix and domain
-    
+
     Args:
         account_name (str): The name of the account being created
 
@@ -287,8 +275,8 @@ def build_root_email_address(account_name: str) -> str:
 
     Raises:
        MissingEnvironmentVariableException: If the prefix or domain environment vars are missing
-        
-    Builds root email from env vars and account name. Removes spaces 
+
+    Builds root email from env vars and account name. Removes spaces
         and special characters.
     """
     try:
@@ -304,36 +292,6 @@ def build_root_email_address(account_name: str) -> str:
         raise MissingEnvironmentVariableException(
             f"The environment variable {str(key_error)} was not found but is required"
         ) from key_error
-
-
-def decommission_process_running(
-    project_name: str = "lzac-account-decommission", cb_client: boto3.client = None
-) -> list:
-    """Checks to see if the decommission CodeBuild project is running
-    
-    Args:
-        project_name (str): CodeBuild Project that runs the decommissioning script
-
-    Returns:
-        list: Results for all IN_PROGRESS CodeBuilds jobs
-
-    Makes CodeBuild API calls to check running builds for the project.
-    """
-    if not cb_client:
-        cb_client = boto3.client("codebuild")
-    try:
-        _paginator = cb_client.get_paginator("list_builds_for_project")
-        _iterator = _paginator.paginate(projectName=project_name)
-        for _iter in _iterator:
-            response = cb_client.batch_get_builds(ids=_iter["ids"])["builds"]
-            in_progress = list(
-                item for item in response if item.get("buildStatus") == "IN_PROGRESS"
-            )
-            LOGGER.debug("in_progress: %s", in_progress)
-            return in_progress
-
-    except Exception as err:
-        LOGGER.error(err)
 
 
 def zip_directory(directory_path, zip_file_name) -> str:
@@ -364,7 +322,7 @@ def get_pipeline_s3_src_config(client: object, pipeline_name='AWSAccelerator-Pip
     Args:
         client (object): An AWS SDK client object with permissions to call the
                          get_pipeline API. This is typically a boto3 CodePipeline client.
-        pipeline_name (str, optional): The name of the pipeline to query. 
+        pipeline_name (str, optional): The name of the pipeline to query.
                                        Defaults to 'AWSAccelerator-Pipeline'.
 
     Returns:
@@ -393,71 +351,3 @@ def get_pipeline_s3_src_config(client: object, pipeline_name='AWSAccelerator-Pip
                     LOGGER.info("Bucket: %s ObjectKey: %s", bucket, object_key)
 
     return bucket, object_key
-
-
-@dataclass
-class HelperCodePipeline:
-    """Helper class for working with AWS CodePipeline
-    
-    Attributes:
-        pipeline_name (str): Name of the CodePipeline
-        cp_client (boto3.client): Boto3 CodePipeline client
-        
-    Helper methods for common CodePipeline operations.
-    """
-    pipeline_name: str
-    cp_client: boto3.client = boto3.client("codepipeline")
-
-    def get(self):
-        """Get information about the pipeline"""
-        return self.cp_client.get_pipeline(name=self.pipeline_name)
-
-    def status(self, execution_id: str, max_attempts: int = 5) -> str:
-        """Get the status of a pipeline execution
-
-        Args:
-            execution_id (str): The CodePipeline execution ID for a released run
-            max_attempts (int): The maximum number of attempts to check the status of the execution before raising an exception. Defaults to 5.
-
-        Returns:
-            str: The status of the execution 'Cancelled'|'InProgress'|'Stopped'|'Stopping'|'Succeeded'|'Superseded'|'Failed'
-        """
-        _attempts = 0
-        while True:
-            try:
-                _execution = self.cp_client.get_pipeline_execution(
-                    pipelineName=self.pipeline_name, pipelineExecutionId=execution_id
-                )
-                return _execution["pipelineExecution"]["status"]
-
-            except (
-                self.cp_client.exceptions.PipelineExecutionNotFoundException
-            ) as not_started_exception:
-                if _attempts >= max_attempts:
-                    raise not_started_exception
-                LOGGER.info("Status lookup not found...waiting 5s and will retry")
-                _attempts += 1
-                sleep(check_delay())
-
-    def other_running_executions(self) -> list:
-        """Check if there are other executions of the pipeline
-        currently running"""
-        _paginator = self.cp_client.get_paginator("list_pipeline_executions")
-        _iterator = _paginator.paginate(pipelineName=self.pipeline_name)
-        _running_executions = list(
-            _iterator.search("pipelineExecutionSummaries[?status == `InProgress`]")
-        )
-        LOGGER.info(
-            "Existing running executions lookup returned: %s", _running_executions
-        )
-        return _running_executions
-
-    def start_execution(self) -> str:
-        """Start the CodePipeline release execution
-
-        Returns:
-            str: The CodePipeline Execution ID
-        """
-        return self.cp_client.start_pipeline_execution(name=self.pipeline_name)[
-            "pipelineExecutionId"
-        ]

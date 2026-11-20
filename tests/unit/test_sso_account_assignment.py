@@ -37,6 +37,8 @@ list_group_response = {
             ],
             "Description": "string",
             "IdentityStoreId": "test-identity-store-id",
+            "GroupArn": "arn:aws:identitystore::123456789012:identitystore/test-identity-store-id/group/test-guid",
+            "Revision": "1",
         }
     ]
 }

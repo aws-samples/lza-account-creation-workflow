@@ -13,7 +13,7 @@ def create_sns_topic(scope, sns_name: str, key: kms.IKey, subscribers_email: lis
     Creates an SNS topic.
 
     Args:
-        scope (Construct): The CDK construct scope in which to define this topic. 
+        scope (Construct): The CDK construct scope in which to define this topic.
         sns_name (str): The name of the SNS topic.
         key (kms.IKey): The KMS key to encrypt the topic.
         subscribers_email (list, optional): List of subscriber email addresses. Defaults to None.
@@ -23,7 +23,7 @@ def create_sns_topic(scope, sns_name: str, key: kms.IKey, subscribers_email: lis
     """
     # Create SNS Topic
     i_sns_topic = sns.Topic(
-        scope, f"rSnsTopic{sns_name.title().replace('/','')}",
+        scope, f"rSnsTopic{sns_name.title().replace('/', '')}",
         display_name=sns_name,
         topic_name=sns_name,
         master_key=key

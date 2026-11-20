@@ -6,6 +6,7 @@
 import os
 import yaml
 import aws_cdk as cdk
+from app.cdk_helpers.nag_helper import enable_nag_checks
 from pipeline.pipeline_stack import PipelineStack
 
 
@@ -24,5 +25,7 @@ PipelineStack(
     ),
     config=config
 )
+
+enable_nag_checks(app)
 
 app.synth()

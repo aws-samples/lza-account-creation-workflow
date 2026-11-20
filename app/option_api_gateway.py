@@ -10,28 +10,108 @@ from aws_cdk import (
     aws_kms as kms,
     aws_lambda as lambda_,
     aws_apigateway as apigw,
-    aws_logs as logs
+    aws_logs as logs,
+    aws_wafv2 as wafv2
 )
 from app.cdk_helpers.lambda_helper import create_lambda_function
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
+
+# Requests allowed per client IP in any 5-minute window before WAF blocks it
+API_RATE_LIMIT_PER_IP = 1000
+# AWS managed rule groups applied to the API, in priority order
+API_MANAGED_RULE_GROUPS = (
+    "AWSManagedRulesAmazonIpReputationList",
+    "AWSManagedRulesCommonRuleSet",
+    "AWSManagedRulesKnownBadInputsRuleSet",
+)
 
 
-def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, retention_role: iam.IRole,
+def _visibility(metric_name: str) -> wafv2.CfnWebACL.VisibilityConfigProperty:
+    """Returns the CloudWatch metrics and sampled-request settings of a WAF rule."""
+    return wafv2.CfnWebACL.VisibilityConfigProperty(
+        cloud_watch_metrics_enabled=True,
+        metric_name=metric_name,
+        sampled_requests_enabled=True
+    )
+
+
+def protect_api_with_waf(scope, api: apigw.RestApi) -> wafv2.CfnWebACL:
+    """
+    Creates a regional AWS WAF web ACL and associates it with the API's stage.
+
+    The web ACL applies AWS managed rule groups (IP reputation, common
+    exploits, known bad inputs) and blocks any client IP that sends more
+    than API_RATE_LIMIT_PER_IP requests in five minutes.
+
+    Args:
+        scope (Construct): The CDK construct scope.
+        api (apigw.RestApi): The REST API to protect.
+
+    Returns:
+        wafv2.CfnWebACL: The web ACL.
+    """
+    rules = [
+        wafv2.CfnWebACL.RuleProperty(
+            name=group,
+            priority=priority,
+            override_action=wafv2.CfnWebACL.OverrideActionProperty(none={}),
+            statement=wafv2.CfnWebACL.StatementProperty(
+                managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
+                    vendor_name="AWS",
+                    name=group
+                )
+            ),
+            visibility_config=_visibility(group)
+        )
+        for priority, group in enumerate(API_MANAGED_RULE_GROUPS)
+    ]
+    rules.append(
+        wafv2.CfnWebACL.RuleProperty(
+            name="RateLimitPerIp",
+            priority=len(API_MANAGED_RULE_GROUPS),
+            action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+            statement=wafv2.CfnWebACL.StatementProperty(
+                rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
+                    aggregate_key_type="IP",
+                    limit=API_RATE_LIMIT_PER_IP
+                )
+            ),
+            visibility_config=_visibility("RateLimitPerIp")
+        )
+    )
+
+    web_acl = wafv2.CfnWebACL(
+        scope, "rApiGatewayWebAcl",
+        scope="REGIONAL",
+        default_action=wafv2.CfnWebACL.DefaultActionProperty(allow={}),
+        description="Protects the Account Creation Workflow REST API.",
+        rules=rules,
+        visibility_config=_visibility("AccountCreationApiWebAcl")
+    )
+    wafv2.CfnWebACLAssociation(
+        scope, "rApiGatewayWebAclAssociation",
+        resource_arn=api.deployment_stage.stage_arn,
+        web_acl_arn=web_acl.attr_arn
+    )
+    return web_acl
+
+
+def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
                       lambda_key: kms.IKey):
     """
     Set up API Gateway for the account creation workflow.
 
     Parameters:
         scope (Construct): The construct scope.
-        config (dict): The configuration dictionary. 
+        config (dict): The configuration dictionary.
         boto3_layer (ILayerVersion): The Lambda layer for AWS SDK.
-        retention_role (IRole): The role for Lambda function logs retention.
         lambda_key (IKey): The KMS key for encrypting Lambda function code.
-    
+
     Returns:
         None
 
-    This function creates the necessary API Gateway resources like REST API, 
-    resources, methods etc to support the account creation workflow. It also 
+    This function creates the necessary API Gateway resources like REST API,
+    resources, methods etc to support the account creation workflow. It also
     sets up Lambda functions and integrates them with API Gateway.
     """
     # Set variables
@@ -54,17 +134,17 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
     account_info = api_gateway.get_account()
 
     # API Gateway Configurations
-    api_deploy_options=apigw.StageOptions(
+    api_deploy_options = apigw.StageOptions(
         access_log_destination=apigw.LogGroupLogDestination(log_group),
         access_log_format=apigw.AccessLogFormat.clf(),
         logging_level=apigw.MethodLoggingLevel.INFO,
         data_trace_enabled=True
     )
 
-    api_endpoint_configuration=apigw.EndpointConfiguration(
+    api_endpoint_configuration = apigw.EndpointConfiguration(
         types=[apigw.EndpointType.EDGE]
     )
- 
+
     api_iam_policy = iam.PolicyDocument(
         statements=[
             iam.PolicyStatement(
@@ -104,6 +184,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
 
     CfnOutput(scope, "oApiGatewayCreateAccountEndpoint", value=api.url)
 
+    protect_api_with_waf(scope, api)
+
     # Check Name Availability
     i_name_available = create_lambda_function(
         scope=scope,
@@ -112,7 +194,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to check to see if the AWS Account Name is available to use.',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
@@ -120,13 +201,35 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
     )
     i_name_available.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "organizations:DescribeOrganization",
-            "organizations:DescribeAccount",
-            "organizations:ListAccounts"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:DescribeAccount",
+                "organizations:ListAccounts"
+            ],
+            resources=[f"arn:{partition}:organizations::{account_id}:account/o-*/*"]
+        ))
+    i_name_available.add_to_role_policy(
+        statement=iam.PolicyStatement(
+            actions=[
+                "organizations:DescribeOrganization",
+                "organizations:ListAccounts"
+            ],
+            resources=["*"]
+        ))
+    nag_suppress(
+        i_name_available.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "organizations:DescribeOrganization and "
+                      "organizations:ListAccounts require '*' resource per "
+                      "AWS documentation. DescribeAccount scoped to org "
+                      "account pattern.",
+            "appliesTo": partition_variants([
+                "Resource::*",
+                f"Resource::arn:<AWS::Partition>:organizations::{account_id}:account/o-*/*"
+            ])
+        }]
+    )
 
     api_check_name = api.root.add_resource("check_name")
     api_check_name.add_method(
@@ -144,7 +247,6 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to kick off the Account Creation StepFunction',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
@@ -153,15 +255,17 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
     )
     i_run_stepfunction.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "states:ListExecutions",
-            "states:DescribeExecution",
-            "states:DescribeStateMachine",
-            "states:StartExecution"
-        ],
-        resources=[f"arn:{partition}:states:{region}:{account_id}:stateMachine:{config['appInfrastructure']['stepFunctionName']}"]
-    ))
- 
+            actions=[
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:DescribeStateMachine",
+                "states:StartExecution"
+            ],
+            resources=[
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:"
+                f"{config['appInfrastructure']['stepFunctionName']}"]
+        ))
+
     api_model = api.add_model(
         "rApiGatewayModel",
         content_type="application/json",
@@ -187,9 +291,9 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
     )
 
     api_validator = api.add_request_validator(
-       "rApiGatewayRequestValidator",
-       request_validator_name="AccountCreationRequestValidator",
-       validate_request_body=True
+        "rApiGatewayRequestValidator",
+        request_validator_name="AccountCreationRequestValidator",
+        validate_request_body=True
     )
 
     # Sets up /execute to be the endpoint
@@ -211,27 +315,29 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         description='This function will be used to check the status of the Account Creation.',
         layers=[boto3_layer],
         timeout=60,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
-            "SF_EXECUTION_ARN_BASE": f"arn:{partition}:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}"
+            "SF_EXECUTION_ARN_BASE": f"arn:{partition}:states:{region}:{account_id}:execution:"
+                                     f"{config['appInfrastructure']['stepFunctionName']}"
         }
     )
     i_get_exec_status.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "states:ListExecutions",
-            "states:DescribeExecution",
-            "states:DescribeStateMachine",
-            "states:StartExecution",
-            "states:GetExecutionHistory"
-        ],
-        resources=[
-            f"arn:{partition}:states:{region}:{account_id}:stateMachine:{config['appInfrastructure']['stepFunctionName']}",
-            f"arn:{partition}:states:{region}:{account_id}:execution:{config['appInfrastructure']['stepFunctionName']}:*"
-        ]
-    ))
+            actions=[
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:DescribeStateMachine",
+                "states:StartExecution",
+                "states:GetExecutionHistory"
+            ],
+            resources=[
+                f"arn:{partition}:states:{region}:{account_id}:stateMachine:"
+                f"{config['appInfrastructure']['stepFunctionName']}",
+                f"arn:{partition}:states:{region}:{account_id}:execution:"
+                f"{config['appInfrastructure']['stepFunctionName']}:*"
+            ]
+        ))
 
     execute = api.root.add_resource("get_execution_status")
     execute.add_method(
@@ -239,6 +345,49 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
         integration=apigw.LambdaIntegration(i_get_exec_status),
         method_responses=[{"statusCode": "200"}],
         authorization_type=apigw.AuthorizationType.IAM
+    )
+
+    # Per-resource cdk-nag suppressions for API Gateway
+    nag_suppress(
+        api,
+        [
+            {
+                "id": "AwsSolutions-COG4",
+                "reason": "API uses IAM authorization (SigV4), not Cognito. "
+                          "IAM auth is appropriate for service-to-service and "
+                          "CLI access patterns."
+            },
+            {
+                "id": "AwsSolutions-APIG2",
+                "reason": "The POST /execute method uses a request validator "
+                          "(AccountCreationRequestValidator). The GET methods "
+                          "take no request body and only optional query "
+                          "strings that the Lambda functions validate."
+            },
+            {
+                "id": "AwsSolutions-IAM4",
+                "reason": "API Gateway CloudWatch role uses the "
+                          "AmazonAPIGatewayPushToCloudWatchLogs managed policy "
+                          "which is the standard approach for API Gateway logging.",
+                "appliesTo": partition_variants([
+                    "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/"
+                    "AmazonAPIGatewayPushToCloudWatchLogs"
+                ])
+            }
+        ]
+    )
+    nag_suppress(
+        i_get_exec_status.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "GetExecutionStatus must access any execution of the "
+                      "step function. Execution names are dynamic. Scoped to "
+                      "specific state machine name with wildcard execution ID.",
+            "appliesTo": partition_variants([
+                f"Resource::arn:<AWS::Partition>:states:{region}:{account_id}:execution:"
+                f"{config['appInfrastructure']['stepFunctionName']}:*"
+            ])
+        }]
     )
 
     # If you would like to deploy a user with credentials to access API Gateway, add a user name to the config file
@@ -256,7 +405,8 @@ def setup_api_gateway(scope, config: dict, boto3_layer: lambda_.ILayerVersion, r
                         resources=[
                             f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/GET/check_name",
                             f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/POST/execute",
-                            f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}/prod/GET/get_execution_status"
+                            f"arn:{partition}:execute-api:{region}:{account_id}:{api.rest_api_id}"
+                            "/prod/GET/get_execution_status"
                         ]
                     )]
                 )

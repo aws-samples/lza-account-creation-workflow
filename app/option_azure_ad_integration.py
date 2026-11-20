@@ -8,28 +8,29 @@ from aws_cdk import (
     aws_lambda as lambda_
 )
 from app.cdk_helpers.lambda_helper import create_lambda_layer, create_lambda_function
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 
 
-def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerVersion, retention_role: iam.IRole, 
-                      lambda_key: kms.IKey) -> dict:
+def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerVersion,
+                               lambda_key: kms.IKey) -> dict:
     """
     Sets up Lambda functions for Azure AD integration.
 
-    Initializes Lambda functions for syncing AD groups, validating 
+    Initializes Lambda functions for syncing AD groups, validating
     group sync to SSO, and attaching permission sets.
 
     Args:
         scope: Construct scope
         config: Configuration dictionary
         boto3_layer: Boto3 layer
-        retention_role: Log retention role 
         lambda_key: KMS key
 
-    Returns:  
+    Returns:
         dict: Map of function names to ARNs
-    """    
+    """
     account_id = Stack.of(scope).account
     region = Stack.of(scope).region
+    partition = Stack.of(scope).partition
 
     _sfn_lambdas = {}
 
@@ -49,7 +50,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
             function_path='stepfunction',
             description='This function will create a new Azure AD group in the specified tenant',
             timeout=900,
-            retention_role=retention_role,
             key=lambda_key,
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
@@ -58,21 +58,37 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
         )
         i_sync_ad_group_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:DescribeSecret",
-                "secretsmanager:ListSecretVersionIds"
-            ],
-            resources=[f"arn:aws:secretsmanager:{region}:{account_id}:secret:{config['appInfrastructure']['graphApiSecretName']}-*"]
-        ))
+                actions=[
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:ListSecretVersionIds"
+                ],
+                resources=[
+                    f"arn:{partition}:secretsmanager:{region}:{account_id}:secret:"
+                    f"{config['appInfrastructure']['graphApiSecretName']}-*"]
+            ))
         i_sync_ad_group_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "secretsmanager:ListSecrets"
-            ],
-            resources=["*"]
-        ))
+                actions=[
+                    "secretsmanager:ListSecrets"
+                ],
+                resources=["*"]
+            ))
+        nag_suppress(
+            i_sync_ad_group_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+            [{
+                "id": "AwsSolutions-IAM5",
+                "reason": "secretsmanager:ListSecrets only supports '*' as "
+                          "resource per AWS documentation. Secret-specific "
+                          "actions are scoped to the GraphApiSecret ARN pattern.",
+                "appliesTo": partition_variants([
+                    "Resource::*",
+                    f"Resource::arn:<AWS::Partition>:secretsmanager:{region}:{account_id}:secret:"
+                    f"{config['appInfrastructure']['graphApiSecretName']}-*"
+                ])
+            }]
+        )
         _sfn_lambdas.update({"AzureADGroupSyncFunctionArn": i_sync_ad_group_fn.function_arn})
 
     # VALIDATE AD GROUP SYNC TO SSO
@@ -86,7 +102,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
             i_identity_center_helper_layer
         ],
         timeout=900,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
@@ -94,12 +109,31 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
     )
     i_valid_ad_group_sync_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sso:ListInstances",
-            "identitystore:ListGroups"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "sso:ListInstances"
+            ],
+            resources=["*"]
+        ))
+    i_valid_ad_group_sync_fn.add_to_role_policy(
+        statement=iam.PolicyStatement(
+            actions=[
+                "identitystore:ListGroups"
+            ],
+            resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
+        ))
+    nag_suppress(
+        i_valid_ad_group_sync_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "sso:ListInstances only supports '*' as resource per "
+                      "AWS documentation. identitystore:ListGroups scoped to "
+                      "account-level identity store ARN pattern.",
+            "appliesTo": partition_variants([
+                "Resource::*",
+                f"Resource::arn:<AWS::Partition>:identitystore::{account_id}:identitystore/*"
+            ])
+        }]
+    )
     _sfn_lambdas.update({"ValidateADGroupSyncToSSOFunctionArn": i_valid_ad_group_sync_fn.function_arn})
 
     # ATTACH PERMISSION SET
@@ -113,7 +147,6 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
             i_identity_center_helper_layer
         ],
         timeout=900,
-        retention_role=retention_role,
         key=lambda_key,
         env_vars={
             "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel']
@@ -121,15 +154,47 @@ def setup_azure_ad_integration(scope, config: dict, boto3_layer: lambda_.ILayerV
     )
     i_attach_permission_set_fn.add_to_role_policy(
         statement=iam.PolicyStatement(
-        actions=[
-            "sso:ListInstances",
-            "sso:CreateAccountAssignment",
-            "identitystore:ListGroups",
-            "sso:ListPermissionSets",
-            "sso:DescribePermissionSet"
-        ],
-        resources=["*"]
-    ))
+            actions=[
+                "sso:ListInstances",
+                "sso:ListPermissionSets",
+                "sso:DescribePermissionSet"
+            ],
+            resources=["*"]
+        ))
+    i_attach_permission_set_fn.add_to_role_policy(
+        statement=iam.PolicyStatement(
+            actions=[
+                "sso:CreateAccountAssignment"
+            ],
+            resources=[
+                f"arn:{partition}:sso:::{account_id}:permissionSet/*/*",
+                f"arn:{partition}:sso:::{account_id}:account/*"
+            ]
+        ))
+    i_attach_permission_set_fn.add_to_role_policy(
+        statement=iam.PolicyStatement(
+            actions=[
+                "identitystore:ListGroups"
+            ],
+            resources=[f"arn:{partition}:identitystore::{account_id}:identitystore/*"]
+        ))
+    nag_suppress(
+        i_attach_permission_set_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "sso:ListInstances, sso:ListPermissionSets, and "
+                      "sso:DescribePermissionSet only support '*' as resource "
+                      "per AWS documentation. sso:CreateAccountAssignment "
+                      "scoped to account-level SSO resources. "
+                      "identitystore:ListGroups scoped to identity store ARN.",
+            "appliesTo": partition_variants([
+                "Resource::*",
+                f"Resource::arn:<AWS::Partition>:sso:::{account_id}:permissionSet/*/*",
+                f"Resource::arn:<AWS::Partition>:sso:::{account_id}:account/*",
+                f"Resource::arn:<AWS::Partition>:identitystore::{account_id}:identitystore/*"
+            ])
+        }]
+    )
     _sfn_lambdas.update({"AttachPermissionSetFunctionArn": i_attach_permission_set_fn.function_arn})
 
     return _sfn_lambdas

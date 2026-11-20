@@ -1,20 +1,22 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-import json
 from aws_cdk import (
     Stack,
     Tags,
-    Aspects,
+    Annotations,
     CfnOutput,
     aws_iam as iam,
     aws_events as events,
     aws_events_targets as targets
 )
 from constructs import Construct
-from cdk_nag import AwsSolutionsChecks, NagSuppressions
-from app.cdk_helpers.helper import replace_ssm_in_config
+from app.cdk_helpers.helper import (
+    LZA_SSM_VALUE_PATTERNS, PLACEHOLDER_ARN, PLACEHOLDER_VALUE,
+    replace_ssm_in_config, validate_ssm_config_value
+)
 from app.cdk_helpers.kms_helper import create_kms_keys
+from app.cdk_helpers.nag_helper import nag_suppress, partition_variants
 from app.cdk_helpers.sns_helper import create_sns_topic
 from app.cdk_helpers.ses_helper import create_ses_identity
 from app.cdk_helpers.stepfunction_helper import create_stepfunction
@@ -33,8 +35,8 @@ class AccountCreationWorkflowStack(Stack):
         """
         Initialize the construct.
 
-        This method sets up initial configuration by replacing SSM 
-        parameters, extracting account details, and initializing 
+        This method sets up initial configuration by replacing SSM
+        parameters, extracting account details, and initializing
         integration settings from the config.
 
         Args:
@@ -42,14 +44,39 @@ class AccountCreationWorkflowStack(Stack):
             construct_id (str): Unique ID for the construct
             config (dict): Configuration dictionary
             **kwargs: Additional arguments
-        
+
         Returns:
             None
         """
         super().__init__(scope, construct_id, **kwargs)
 
-        # Replace SSM Parameters within config file
+        # Replace SSM Parameters within config file. The raw values are kept so
+        # that the checks below can name the SSM parameter in an error.
+        raw_lza_values = {
+            key: config['appInfrastructure'].get(key)
+            for key in LZA_SSM_VALUE_PATTERNS
+        }
         config = replace_ssm_in_config(scope=self, input_config=config)
+        if config['appInfrastructure'].get('lzaPipelineSource', 'S3') == 'S3':
+            for key, (pattern, description) in LZA_SSM_VALUE_PATTERNS.items():
+                if raw_lza_values[key] is None:
+                    Annotations.of(self).add_error(
+                        f"deploy-config.yaml is missing 'appInfrastructure.{key}' "
+                        "(an SSM: reference), which is required when "
+                        "lzaPipelineSource is S3."
+                    )
+                    # Placeholder keeps the rest of the stack well formed
+                    config['appInfrastructure'][key] = (
+                        PLACEHOLDER_ARN if key.endswith('Arn') else PLACEHOLDER_VALUE
+                    )
+                    continue
+                validate_ssm_config_value(
+                    scope=self,
+                    parameter_name=str(raw_lza_values[key]).replace("SSM:", ""),
+                    value=config['appInfrastructure'][key],
+                    pattern=pattern,
+                    description=description
+                )
 
         # Set varaibles
         account_id = Stack.of(self).account
@@ -96,34 +123,15 @@ class AccountCreationWorkflowStack(Stack):
             description='Updated boto3 layer to ensure the latest boto3 package is being used for AWS Lambda Functions'
         )
 
-        # IAM Role for cdk log retention
-        i_log_retention_role = iam.Role(
-            self, "rLogRetentionRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="IAM Role for the Log Retention Solution"
-        )
-        i_log_retention_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-        )
-        i_log_retention_role.add_to_policy(
-            statement=iam.PolicyStatement(
-            actions=[
-                "logs:CreateLogGroup",
-                "logs:DeleteRetentionPolicy",
-                "logs:PutRetentionPolicy"
-            ],
-            resources=["*"]
-        ))
-
         # Lambda Event Based
         i_account_tag_ssm_parameter_fn = create_lambda_function(
             scope=self,
             function_name='AccountTagToSsmParameter',
             function_path='event',
-            description='This function will create a local SSM Parameter for each Account Tag found in AWS Organizations.',
+            description='This function will create a local SSM Parameter for each Account Tag '
+                        'found in AWS Organizations.',
             layers=[i_account_creation_helper_layer, i_boto3_layer],
             timeout=120,
-            retention_role=i_log_retention_role,
             key=i_kms_keys['Lambda'],
             env_vars={
                 "LOG_LEVEL": config['appInfrastructure']['lambda']['functionLogLevel'],
@@ -132,14 +140,28 @@ class AccountCreationWorkflowStack(Stack):
         )
         i_account_tag_ssm_parameter_fn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=[
-                "sts:AssumeRole"
-            ],
-            resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
-        ))
+                actions=[
+                    "sts:AssumeRole"
+                ],
+                resources=[f"arn:{partition}:iam::*:role/{config['appInfrastructure']['accountTagToSsmParameterRole']}"]
+            ))
+        nag_suppress(
+            i_account_tag_ssm_parameter_fn.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+            [{
+                "id": "AwsSolutions-IAM5",
+                "reason": "sts:AssumeRole targets the tag-to-SSM role in all "
+                          "managed accounts. Account IDs are dynamic (created "
+                          "during workflow). Scoped to specific role name: "
+                          f"{config['appInfrastructure']['accountTagToSsmParameterRole']}",
+                "appliesTo": partition_variants([
+                    f"Resource::arn:<AWS::Partition>:iam::*:role/"
+                    f"{config['appInfrastructure']['accountTagToSsmParameterRole']}"
+                ])
+            }]
+        )
 
-        # EventBus is needed incase the originating region is not us-east-1, organizational resources only push 
-        #   Cloudtrail events to us-east-1. We have to pass that event to the from us-east-1 to the desired region. 
+        # EventBus is needed incase the originating region is not us-east-1, organizational resources only push
+        #   Cloudtrail events to us-east-1. We have to pass that event to the from us-east-1 to the desired region.
         if region != 'us-east-1':
             i_event_bus = events.EventBus(
                 self, "rLzaAccountCreationWorkflowEventBus",
@@ -151,28 +173,28 @@ class AccountCreationWorkflowStack(Stack):
                 self, "rDefaultEventBus",
                 event_bus_name='default'
             )
-            
-        events.Rule(self, "rEventRuleAccountTagToSsmParameter",
-            event_bus=i_event_bus,                    
-            event_pattern=events.EventPattern(
-                detail={
-                    "eventSource": ["organizations.amazonaws.com"],
-                    "eventName": ["TagResource", "UntagResource"]
-                },
-                detail_type=events.Match.equals_ignore_case("AWS API Call via CloudTrail"),
-                source=["aws.organizations"],
-            ),
-            targets=[targets.LambdaFunction(i_account_tag_ssm_parameter_fn)]
-        )
 
-        # Lamdab Functions used by StepFunction
+        events.Rule(self, "rEventRuleAccountTagToSsmParameter",
+                    event_bus=i_event_bus,
+                    event_pattern=events.EventPattern(
+                        detail={
+                            "eventSource": ["organizations.amazonaws.com"],
+                            "eventName": ["TagResource", "UntagResource"]
+                        },
+                        detail_type=events.Match.equals_ignore_case("AWS API Call via CloudTrail"),
+                        source=["aws.organizations"],
+                    ),
+                    targets=[targets.LambdaFunction(i_account_tag_ssm_parameter_fn)]
+                    )
+
+        # Lambda Functions used by StepFunction
         sfn_lambdas = setup_default_stepfunction_lambdas(
             scope=self,
             config=config,
             boto3_layer=i_boto3_layer,
             account_creation_layer=i_account_creation_helper_layer,
-            retention_role=i_log_retention_role,
             lambda_key=i_kms_keys['Lambda'],
+            sns_key=i_kms_keys['SNS'],
             account_creation_failure_sns_arn=i_account_creation_failure_sns.topic_arn,
             account_creation_email_ses_identity=i_account_creation_from_email_ses.email_identity_name
         )
@@ -183,7 +205,6 @@ class AccountCreationWorkflowStack(Stack):
                 scope=self,
                 config=config,
                 boto3_layer=i_boto3_layer,
-                retention_role=i_log_retention_role,
                 lambda_key=i_kms_keys['Lambda']
             )
 
@@ -203,7 +224,6 @@ class AccountCreationWorkflowStack(Stack):
                 scope=self,
                 config=config,
                 boto3_layer=i_boto3_layer,
-                retention_role=i_log_retention_role,
                 lambda_key=i_kms_keys['Lambda']
             )
 
@@ -217,38 +237,10 @@ class AccountCreationWorkflowStack(Stack):
         )
         i_sfn.add_to_role_policy(
             statement=iam.PolicyStatement(
-            actions=["lambda:InvokeFunction"],
-            resources=list(sfn_lambdas.values())
-        ))
-
-        NagSuppressions.add_stack_suppressions(
-            self,
-            [{
-                "id": 'AwsSolutions-IAM4',
-                "reason": 'The IAM user, role, or group uses AWS managed policies.'
-            },
-            {
-                "id": 'AwsSolutions-IAM5',
-                "reason": 'The IAM entity contains wildcard permissions and does not have a cdk-nag rule suppression' \
-                    ' with evidence for those permission.'
-            },
-            {
-                "id": 'AwsSolutions-L1',
-                "reason": 'The non-container Lambda function is not configured to use the latest runtime version.'
-            },
-            {
-                "id": 'AwsSolutions-COG4',
-                "reason": 'The API GW method does not use a Cognito user pool authorizer.'
-            },
-            {
-                "id": 'AwsSolutions-APIG2',
-                "reason": 'Validation has been created for POST Method.'
-            }]
-        )
+                actions=["lambda:InvokeFunction"],
+                resources=list(sfn_lambdas.values())
+            ))
 
         # Add tags to all resources created
-        tags = json.loads(json.dumps(config['tags']))
-        for key, value in tags.items():
+        for key, value in config['tags'].items():
             Tags.of(self).add(key, value)
-
-        Aspects.of(self).add(AwsSolutionsChecks())

@@ -4,84 +4,120 @@
 import os
 import logging
 import json
+
 import boto3
+from botocore.exceptions import ClientError
 
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 LOGGER = logging.getLogger()
 LOGGER.setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
 logging.getLogger("botocore").setLevel(logging.ERROR)
 
+SF_CLIENT = boto3.client("stepfunctions")
+
 
 def lambda_handler(event, context):
     """
-    Handles Lambda function requests and returns responses.
+    Returns the status of a Step Function execution.
 
     Args:
-        event (dict): The event passed by Lambda 
+        event (dict): The event passed by API Gateway
         context (object): Lambda Context runtime methods and attributes
 
-    Returns: 
-        dict: The API response including statusCode and body
+    Returns:
+        dict: API response with execution status
     """
-    LOGGER.info(json.dumps(event))
-    status_code = 404
-
-    response_body = {}
-    body = '{"message": "lambda did not complete"}'
-    sf_client = boto3.client(service_name='stepfunctions')
+    LOGGER.info("GetExecutionStatus invoked")
 
     try:
-        # Get StepFunction Execution or ExecutionArn from API Parameter
-        execution_arn = event['queryStringParameters'].get('execution_arn')
-        execution = event['queryStringParameters'].get('execution')
+        query_params = event.get('queryStringParameters') or {}
+        execution_arn = query_params.get('execution_arn')
+        execution = query_params.get('execution')
 
         if not execution_arn and not execution:
-            raise Exception("Please specify \"execution_arn\" or \"execution\" as API Parameter.")
+            return {
+                "statusCode": 400,
+                "body": json.dumps({
+                    "error": {
+                        "code": "MISSING_PARAMETER",
+                        "message": "Specify execution_arn or execution as query parameter"
+                    }
+                }),
+                "isBase64Encoded": False,
+                "headers": {"content-type": "application/json"}
+            }
 
-        # Setup StepFunction Execution Arn if one is not setup
+        # Build execution ARN if only name provided
         if not execution_arn:
-            execution = event['queryStringParameters'].get('execution')
             execution_arn = f"{os.environ['SF_EXECUTION_ARN_BASE']}:{execution}"
 
-        LOGGER.info(f"Getting Status for StepFunction Execution Arn: {execution_arn} ")
+        LOGGER.info("Getting status for execution: %s", execution_arn)
 
         # Get StepFunction Execution Results
-        sm_desc_response = sf_client.describe_execution(
+        sm_desc_response = SF_CLIENT.describe_execution(
             executionArn=execution_arn
         )
-        response_body['Status'] = sm_desc_response.get('status')
+        response_body = {'Status': sm_desc_response.get('status')}
 
         if response_body['Status'] not in ['SUCCEEDED', 'FAILED']:
-            sm_exec_hist_response = sf_client.get_execution_history(
+            sm_exec_hist_response = SF_CLIENT.get_execution_history(
                 executionArn=execution_arn,
                 reverseOrder=True,
                 includeExecutionData=False
             )
 
-            current_task = sm_exec_hist_response['events'][0].get('stateEnteredEventDetails', \
-                {"name": "State machines is still starting, try again in a few seconds."}).get('name')
+            current_task = sm_exec_hist_response['events'][0].get(
+                'stateEnteredEventDetails',
+                {"name": "State machine is still starting, try again in a few seconds."}
+            ).get('name')
             response_body['CurrentExecutionTask'] = current_task
 
         if response_body['Status'] == 'FAILED':
-            response_body['Cause'] = sm_desc_response['cause']
+            response_body['Cause'] = sm_desc_response.get('cause', 'Unknown')
 
-        # Building response for Api Call
-        status_code = 200
-        body = json.dumps(response_body)
-
-    except Exception as err:
-        LOGGER.error(err)
-        status_code = 404
-        body = '{"Failure": "%s"}' % str(err)
-
-    finally:
-        response = {
-            "statusCode": status_code,
-            "body": body,
+        return {
+            "statusCode": 200,
+            "body": json.dumps(response_body),
             "isBase64Encoded": False,
-            "headers": {
-                "content-type": "application/json"
-            }
+            "headers": {"content-type": "application/json"}
         }
-        LOGGER.info(response)
-        return response
+
+    except SF_CLIENT.exceptions.ExecutionDoesNotExist:
+        LOGGER.warning("Execution not found: %s", execution_arn if 'execution_arn' in dir() else execution)
+        return {
+            "statusCode": 404,
+            "body": json.dumps({
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Step Function execution not found"
+                }
+            }),
+            "isBase64Encoded": False,
+            "headers": {"content-type": "application/json"}
+        }
+    except ClientError as err:
+        LOGGER.error("AWS API error in GetExecutionStatus: %s", err)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": {
+                    "code": "AWS_ERROR",
+                    "message": "Internal service error"
+                }
+            }),
+            "isBase64Encoded": False,
+            "headers": {"content-type": "application/json"}
+        }
+    except Exception as err:
+        LOGGER.exception("Unexpected error in GetExecutionStatus")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal service error"
+                }
+            }),
+            "isBase64Encoded": False,
+            "headers": {"content-type": "application/json"}
+        }

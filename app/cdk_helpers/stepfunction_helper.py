@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_logs as logs,
     Duration
 )
+from app.cdk_helpers.nag_helper import nag_suppress
 
 
 def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str) -> sfn.StateMachine:
@@ -21,7 +22,7 @@ def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str)
     Returns:
         sfn.StateMachine: The created state machine object.
     """
-    log_group = logs.LogGroup(scope, f"rLogGroup{sfn_name.title().replace('/','')}")
+    log_group = logs.LogGroup(scope, f"rLogGroup{sfn_name.title().replace('/', '')}")
 
     stepfunction = sfn.StateMachine(
         scope, f"rStateMachine{sfn_name}",
@@ -34,6 +35,20 @@ def create_stepfunction(scope, sfn_name: str, sfn_data: dict, sfn_def_file: str)
             destination=log_group,
             level=sfn.LogLevel.ALL
         )
+    )
+
+    # CloudWatch Logs delivery and X-Ray actions that CDK adds to the state
+    # machine role do not support resource-level permissions.
+    nag_suppress(
+        stepfunction.role.node.find_child('DefaultPolicy').node.find_child('Resource'),
+        [{
+            "id": "AwsSolutions-IAM5",
+            "reason": "Step Functions logging (logs:CreateLogDelivery and "
+                      "related actions) and tracing (xray:Put*) require '*' "
+                      "as resource because those APIs support no resource-level "
+                      "permissions.",
+            "appliesTo": ["Resource::*"]
+        }]
     )
 
     return stepfunction
