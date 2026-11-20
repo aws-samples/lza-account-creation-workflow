@@ -61,8 +61,8 @@ Optionally, there is a feature that integrates Microsoft Entra ID (Azure Active 
   `aws-cdk-lib` 2.277.0. Update it with `npm install -g aws-cdk`.
 
 - Python 3.11 or later for the CDK app (the pipeline's CodeBuild image,
-  `aws/codebuild/standard:7.0`, runs Python 3.11). The Lambda functions run
-  on Python 3.12.
+  `aws/codebuild/standard:7.0`, runs Python 3.11). The Lambda functions and
+  layers run on Python 3.14.
 
 - [Install Docker](https://docs.docker.com/engine/install/) and start the Docker Engine.
 

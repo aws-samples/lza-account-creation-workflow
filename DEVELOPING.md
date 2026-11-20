@@ -12,7 +12,9 @@ pip install -r requirements.txt -r requirements-test.txt
 
 Use Python 3.11 or later. The pipeline synthesizes the CDK app on Python
 3.11, so code must not rely on newer syntax such as f-string expressions that
-span several lines.
+span several lines. The Lambda functions run on Python 3.14 (set in
+`app/cdk_helpers/lambda_helper.py`); run the tests on 3.14 too when you change
+Lambda code.
 
 ## Unit tests
 

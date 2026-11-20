@@ -165,6 +165,17 @@ def test_each_function_has_explicit_log_group(app_template):
     assert len(targets) == len(functions)
 
 
+def test_functions_and_layers_use_python_3_14(app_template):
+    """Every Lambda function and layer targets the python3.14 runtime."""
+    functions = app_template.find_resources("AWS::Lambda::Function")
+    layers = app_template.find_resources("AWS::Lambda::LayerVersion")
+    assert functions and layers
+    for resource in functions.values():
+        assert resource["Properties"]["Runtime"] == "python3.14"
+    for resource in layers.values():
+        assert resource["Properties"]["CompatibleRuntimes"] == ["python3.14"]
+
+
 # FR3 / FR4: scoped Lambda roles from the SSM-sourced values
 def test_create_account_s3_role_uses_exact_bucket_and_key(app_template):
     """CreateAccountS3 is scoped to the config bucket and the LZA key."""

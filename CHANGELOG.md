@@ -31,6 +31,10 @@
 
 ### Changed
 
+- Move every Lambda function and layer from Python 3.12 to Python 3.14, with
+  the matching SAM build image
+  (`public.ecr.aws/sam/build-python3.14:1.174.0-20261120044557`). The
+  runtime and image are set once in `app/cdk_helpers/lambda_helper.py`.
 - Update Python dependencies: aws-cdk-lib 2.277.0, cdk-nag 2.38.2,
   boto3 1.44.7, PyYAML 6.0.3, requests 2.34.2, msal 1.39.0, PyGithub 2.10.0,
   urllib3 2.8.0, moto 5.2.5, pytest 9.2.0, pytest-cov 7.1.0 and tox 4.67.15.

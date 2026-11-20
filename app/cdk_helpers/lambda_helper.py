@@ -16,6 +16,11 @@ from aws_cdk import (
 from cdk_nag import NagSuppressions
 from app.cdk_helpers.nag_helper import partition_variants
 
+# Every Lambda function and layer in this solution runs on this runtime.
+LAMBDA_RUNTIME = lambda_.Runtime.PYTHON_3_14
+# SAM build image for LAMBDA_RUNTIME, pinned so bundling is repeatable.
+BUNDLING_IMAGE = "public.ecr.aws/sam/build-python3.14:1.174.0-20261120044557"
+
 
 def suppress_lambda_nag_findings(i_function: lambda_.IFunction, check_runtime: bool = True) -> None:
     """
@@ -42,9 +47,9 @@ def suppress_lambda_nag_findings(i_function: lambda_.IFunction, check_runtime: b
             i_function,
             [{
                 "id": "AwsSolutions-L1",
-                "reason": "The functions use the Python 3.12 runtime, which Lambda "
-                          "still supports. Moving to a newer runtime is a separate "
-                          "change."
+                "reason": "The functions use Python 3.14, which Lambda supports "
+                          "until June 2029. Python 3.15 is newer; moving to it is "
+                          "a separate change."
             }]
         )
 
@@ -68,7 +73,7 @@ def create_lambda_layer(scope, layer_name: str, description: str = None) -> lamb
         code=lambda_.Code.from_asset(
             path=path.join(Path(__file__).parents[0], f"../lambda_layer/{layer_name}"),
             bundling=BundlingOptions(
-                image=DockerImage.from_registry("public.ecr.aws/sam/build-python3.12:1.117.0-20240521231233"),
+                image=DockerImage.from_registry(BUNDLING_IMAGE),
                 command=[
                     'bash',
                     '-c',
@@ -77,7 +82,7 @@ def create_lambda_layer(scope, layer_name: str, description: str = None) -> lamb
                 output_type=BundlingOutput.AUTO_DISCOVER
             ),
         ),
-        compatible_runtimes=[lambda_.Runtime.PYTHON_3_12],
+        compatible_runtimes=[LAMBDA_RUNTIME],
         description=description
     )
 
@@ -127,13 +132,13 @@ def create_lambda_function(scope, function_name: str, function_path: str,
     i_function = lambda_.Function(
         scope, f"rLambdaFunction{function_name}",
         function_name=function_name,
-        runtime=lambda_.Runtime.PYTHON_3_12,
+        runtime=LAMBDA_RUNTIME,
         handler="main.lambda_handler",
         description=description,
         code=lambda_.Code.from_asset(
             path=path.join(Path(__file__).parents[0], f"../lambda_src/{function_path}/{function_name}"),
             bundling=BundlingOptions(
-                image=DockerImage.from_registry("public.ecr.aws/sam/build-python3.12:1.117.0-20240521231233"),
+                image=DockerImage.from_registry(BUNDLING_IMAGE),
                 command=[
                     'bash',
                     '-c',
