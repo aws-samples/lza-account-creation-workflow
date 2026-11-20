@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 import boto3
 import pytest
 from botocore.exceptions import ClientError
-from moto import mock_organizations
+from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 
 # Set region before importing module (module-level boto3 clients need it)
@@ -194,7 +194,7 @@ class TestNameAvailabilityWithMoto:
 
     def test_account_not_found_returns_null(self, aws_credentials):
         """Account not in Organizations returns null"""
-        with mock_organizations():
+        with mock_aws():
             org_client = boto3.client("organizations", region_name="us-east-1")
             org_client.create_organization()
 

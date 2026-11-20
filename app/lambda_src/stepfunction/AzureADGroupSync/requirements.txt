@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-urllib3==2.7.0
-msal==1.31.1
-requests==2.33.0
+urllib3==2.8.0
+msal==1.39.0
+requests==2.34.2

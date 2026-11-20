@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 
 import pytest
-from moto import mock_ses
+from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.ses import ses_backends
 
@@ -24,7 +24,7 @@ TEST_EMAIL_DATA = {
 
 def test_generate_email_html(aws_credentials):
     """Test function for generate email html method"""
-    with mock_ses():
+    with mock_aws():
         test_email = EmailData(**TEST_EMAIL_DATA)
         html, text = test_email.generate_email_html()
         assert "<html" in html

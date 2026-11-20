@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-PyGithub==2.5.0
-PyYAML==6.0.2
+PyGithub==2.10.0
+PyYAML==6.0.3
 urllib3==2.8.0
-requests==2.33.0
+requests==2.34.2

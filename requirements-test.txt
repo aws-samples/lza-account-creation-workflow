@@ -1,13 +1,13 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-pytest==9.0.3
-pytest-cov==6.1.1
-tox==4.23.2
-boto3==1.38.0
-moto==5.1.2
-msal==1.31.1
+pytest==9.2.0
+pytest-cov==7.1.0
+tox==4.67.15
+boto3==1.44.7
+moto==5.2.5
+msal==1.39.0
 requests_mock==1.12.1
-aws-cdk-lib>=2.164.1
+aws-cdk-lib==2.277.0
 constructs>=10.0.0,<11.0.0
-cdk-nag==2.30.1
+cdk-nag==2.38.2

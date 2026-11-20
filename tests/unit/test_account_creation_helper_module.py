@@ -9,7 +9,7 @@ import boto3
 import botocore
 from botocore.exceptions import ClientError
 from botocore.stub import Stubber
-from moto import mock_sts
+from moto import mock_aws
 import pytest
 
 sys.path.insert(0, 'app/lambda_layer/account_creation_helper/python')
@@ -18,7 +18,7 @@ sys.path.insert(0, 'app/lambda_layer/account_creation_helper/python')
 class TestAssumeRoleArn:
     """Test assume_role_arn calls STS correctly."""
 
-    @mock_sts
+    @mock_aws
     def test_assume_role_returns_credentials(self, aws_credentials):
         """assume_role_arn returns dict with access key, secret, and token."""
         from account_creation_helper import assume_role_arn
@@ -39,7 +39,7 @@ class TestAssumeRoleArn:
         assert result["aws_secret_access_key"] is not None
         assert result["aws_session_token"] is not None
 
-    @mock_sts
+    @mock_aws
     def test_assume_role_uses_default_session_name(self, aws_credentials, monkeypatch):
         """assume_role_arn uses Lambda function name as default session name."""
         monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "my-lambda-func")
